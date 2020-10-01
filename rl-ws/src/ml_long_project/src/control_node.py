@@ -66,6 +66,8 @@ def get_cmd(str_cmd):
         forward()
     elif str_cmd.data == "backward":
         backward()
+    elif str_cmd.data == "halt":
+        halt()
     
 def turn_r_90():
     # 90 degree right turn
@@ -96,6 +98,11 @@ def backward():
     # move straight backwards
     send_cmd(-1, 0)
     stall(1)
+
+def halt():
+    # stop moving
+    send_cmd(0, 0)
+    # no stalling necessary
 
 def stall(wait_time):
     cur_time = time()

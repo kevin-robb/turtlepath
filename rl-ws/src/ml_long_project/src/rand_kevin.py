@@ -5,14 +5,13 @@ from random import randint
 #import time
 from geometry_msgs.msg import Twist, Vector3
 from sensor_msgs.msg import LaserScan
+from std_msgs.msg import String, Int32MultiArray
 
 ## Global Variables
 # mobile_base velocity publisher
 command_pub = None
-# Twist command that will be sent to the robot
-rand_cmd = Twist()
-# boolean to perma stop the robot
-halt = False
+# String command that will be sent to the robot
+cmd_msg = String()
 # selected entries in the lidar's range
 fwd_scan = None
 rear_scan = None
@@ -28,68 +27,55 @@ cur_state = "init"
 fwd_spd = None
 turn_spd = None
 
-def check_scan(scan_msg):
+def get_scan_ranges(scan_msg):
     global fwd_scan, rear_scan, l45_scan, l_scan, r45_scan, r_scan
-    # scan_msg.ranges is an array of 640 elements representing 
-    # distance measurements in a full circle around the robot (0=fwd, CCW?)
+    # format is [fwd_scan, rear_scan, l45_scan, l_scan, r45_scan, r_scan]
 
     # update the important entries
-    fwd_scan = scan_discrete(scan_msg.ranges[0]) # directly forward
-    rear_scan = scan_discrete(scan_msg.ranges[320]) # directly behind
-    l45_scan = scan_discrete(scan_msg.ranges[80]) # ~45 degrees left
-    l_scan = scan_discrete(scan_msg.ranges[160]) # 90 degrees left
-    r45_scan = scan_discrete(scan_msg.ranges[560]) # ~45 degrees right
-    r_scan = scan_discrete(scan_msg.ranges[480]) # 90 degrees right
-
-def scan_discrete(scan_val):
-    # turns continuous scan values into either 1, 2, or 3 to 
-    # represent dist to obstacle in a discrete format (shrink state space)
-    if scan_val == 0:
-        # a lidar reading of 0 means it doesn't see anything
-        return 3
-    elif scan_val < 2:
-        # close obstacle
-        return 1
-    elif scan_val < 4:
-        # visible obstacle
-        return 2
-    else:
-        # far away obstacle
-        return 0
+    fwd_scan = scan_msg.data[0] # directly forward
+    rear_scan = scan_msg.data[1] # directly behind
+    l45_scan = scan_msg.data[2] # ~45 degrees left
+    l_scan = scan_msg.data[3] # 90 degrees left
+    r45_scan = scan_msg.data[4] # ~45 degrees right
+    r_scan = scan_msg.data[5] # 90 degrees right
 
 def check_state():
     global fwd_spd, turn_spd, cur_state
     if cur_state == "init":
-        # start by going into the halt state
+        # start by going into the drive state
         cur_state = "drive"
-        fwd_spd = 0.4
-        turn_spd = 0
+        send_command("forward")
     elif cur_state == "drive" and fwd_scan == 1:
         # if an obstacle is in the "close" range, halt
         cur_state = "halt"
-        fwd_spd = 0
-        turn_spd = 0
+        send_command("forward")
     elif cur_state == "halt":
         # choose a random direction to turn
-        if randint(0, 1) == 0:
+        selection = randint(0, 3)
+        if selection == 0:
             cur_state = "turn_r"
-            fwd_spd = 0
-            turn_spd = -1
+            send_command("turn_r_90")
+        elif selection == 1:
+            cur_state = "turn_r"
+            send_command("turn_r_45")
+        elif selection == 2:
+            cur_state = "turn_l"
+            send_command("turn_l_90")
         else:
             cur_state = "turn_l"
-            fwd_spd = 0
-            turn_spd = 1
+            send_command("turn_r_45")
     elif cur_state == "turn_r" or cur_state == "turn_l":
         # turn in place until there is free space ahead
-        # or TODO turn for a set amount of time that causes a 90 degree turn
         if fwd_scan > 1:
             cur_state = "drive"
-            fwd_spd = 1
-            turn_spd = 0
+            send_command("forward")
 
-def send_command(timer_event):
-    global fwd_spd, turn_spd
+def send_command(keyword):
+    cmd_msg.data = keyword
+    command_pub.publish(cmd_msg)
 
+def update_state(timer_event):
+    # at each timer step, update the state and send an action
     check_state()
 
     # tell us the current state for debug
@@ -100,17 +86,6 @@ def send_command(timer_event):
     if cur_state == "init":
         return
 
-    # x-direction is forward
-    lin_vel = Vector3(fwd_spd, 0, 0)
-    # turn around z-axis to stay within xy-plane
-    ang_vel = Vector3(0, 0, turn_spd)
-
-    rand_cmd.linear = lin_vel
-    rand_cmd.angular = ang_vel
-
-    command_pub.publish(rand_cmd)
-
-
 def main():
     global command_pub
 
@@ -118,13 +93,14 @@ def main():
     rospy.init_node('rand_kevin')
 
     # publish command to the turtlebot
-    command_pub = rospy.Publisher("/cmd_vel", Twist, queue_size=1)
+    command_pub = rospy.Publisher("/tp/cmd", String, queue_size=1)
 
-    # subscribe to the lidar scan values
-    rospy.Subscriber('/scan', LaserScan, check_scan, queue_size=1)
+    # subscribe to the grouped scan values
+    # format is [fwd_scan, rear_scan, l45_scan, l_scan, r45_scan, r_scan]
+    rospy.Subscriber('/tp/scan', Int32MultiArray, get_scan_ranges, queue_size=1)
 
     # Set up a timer to update robot's drive state at 4 Hz
-    rospy.Timer(rospy.Duration(secs=0.25), send_command)
+    rospy.Timer(rospy.Duration(secs=0.25), update_state)
     # pump callbacks
     rospy.spin()
 
