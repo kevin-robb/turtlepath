@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import rospy
+from random import randint
 #import time
 from geometry_msgs.msg import Twist, Vector3
 from sensor_msgs.msg import LaserScan
@@ -52,15 +53,16 @@ def check_state():
         fwd_spd = 0
         turn_spd = 0
     elif cur_state == "halt":
-        # check surroundings and decide where to go
-        if r_scan < 0.001 or r_scan > 2:
+        # choose a random direction to turn.
+        if randint(0, 1) == 0:
             cur_state = "turn_r"
-            fwd_spd = 0.1
-            turn_spd = 1
-        elif l_scan < 0.001 or l_scan > 2:
-            cur_state = "turn_l"
-            fwd_spd = 0.1
+            fwd_spd = 0
             turn_spd = -1
+        #elif l_scan < 0.001 or l_scan > 2:
+        else:
+            cur_state = "turn_l"
+            fwd_spd = 0
+            turn_spd = 1
         #else #do nothing for now, stay in halt
     elif cur_state == "turn_r" or cur_state == "turn_l":
         # turn in place until there is free space ahead
@@ -114,8 +116,8 @@ def main():
     # subscribe to the lidar scan values
     rospy.Subscriber('/scan', LaserScan, check_scan, queue_size=1)
 
-    # Set up a timer to update robot's drive state at 20 Hz
-    rospy.Timer(rospy.Duration(secs=0.05), send_command)
+    # Set up a timer to update robot's drive state at 4 Hz
+    rospy.Timer(rospy.Duration(secs=0.25), send_command)
     # pump callbacks
     rospy.spin()
 
