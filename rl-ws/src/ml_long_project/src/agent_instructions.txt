@@ -1,0 +1,39 @@
+All agents should be made in this format and in this directory to allow comparision.
+Each agent should have a separate launch file made for it which runs the agent and the control_node.
+The control_node should be used with all agents. 
+
+Agents should be sure to include these import statements:
+    from std_msgs.msg import String, Int32MultiArray
+
+Agents should subscribe to the topic '/tp/scan' to receive data from the environment. 
+This will ensure all agents are comparable, and the state space stays manageable.
+The message received will be an Int32MultiArray whose data object contains the list:
+    [fwd_scan, rear_scan, l45_scan, l_scan, r45_scan, r_scan]
+    Where the scan values are:
+        fwd_scan: directly ahead
+        rear_scan: directly behind
+        l45_scan: 45 degrees left
+        l_scan: 90 degrees left
+        r45_scan: 45 degrees right
+        r_scan: 90 degrees right
+    These are discrete integer values, each either 1, 2, or 3.
+    A value of 1 means an obstacle is close (w/in 2 meters).
+    A value of 2 means an obstacle is visible (w/in 4 meters).
+    A value of 3 means obstacles are too far away or nothing can be seen at all.
+
+Agents should publish to the topic '/tp/cmd' to give commands to the robot.
+This will ensure all agents can control the robot the same way, and the state space stays manageable.
+The message to be sent should be a String whose data object contains one of the following:
+    "forward": drive forward for 1 second.
+    "backward": drive backward for 1 second.
+    "turn_r_90": turn 90 degrees right.
+    "turn_r_45": turn 45 degrees right.
+    "turn_l_90": turn 90 degrees left.
+    "turn_l_45": turn 45 degrees left.
+    "halt": stop all movement.
+
+None of this is set in stone. 
+I have not tuned the timings yet in the control_node. 
+I think we might not want to allow 45 degree turns, but rather only 90 degrees.
+
+The point of all of this is to keep the interactions discrete to shrink the state space, and make sure we are being consistent with what our agents can do.
