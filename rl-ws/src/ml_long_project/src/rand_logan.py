@@ -6,7 +6,8 @@ from random import randint
 from geometry_msgs.msg import Twist, Vector3
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import String, Int32MultiArray
-
+from nav_msgs.msg import OccupancyGrid
+import numpy as np
 
 ## Global Variables
 # mobile_base velocity publisher
@@ -63,7 +64,23 @@ def check_state():
         cur_state = "turn_r"
         send_command("turn_r_90")      
         
-       
+def get_map(map_msg):
+    #print(map_msg.info)
+    # Take in the full map and put it into numpy
+    big_map = (np.asarray(map_msg.data))
+    big_map = np.reshape(big_map, (map_msg.info.height,map_msg.info.width))
+    
+    # Create a downsampled map
+    resolution = map_msg.info.resolution
+    small_map = np.zeros((int(map_msg.info.width*resolution)+1,int(map_msg.info.width*resolution)+1))
+
+    for x in range(small_map.shape[0]):
+        for y in range(small_map.shape[0]):
+            print(int(y/resolution))
+            big_x = int(x/resolution)
+            big_y = int(y/resolution)
+            small_map[y,x] = big_map[big_x,big_y]
+    print(small_map)
 
 
 def send_command(keyword):
@@ -90,9 +107,10 @@ def main():
     # subscribe to the grouped scan values
     # format is [fwd_scan, rear_scan, l45_scan, l_scan, r45_scan, r_scan]
     rospy.Subscriber('/tp/scan', Int32MultiArray, get_scan_ranges, queue_size=1)
+    rospy.Subscriber('/map', OccupancyGrid, get_map, queue_size=1)
 
     # Set up a timer to update robot's drive state at 1 Hz
-    rospy.Timer(rospy.Duration(secs=1), update_state)
+    rospy.Timer(rospy.Duration(secs=3), update_state)
     # pump callbacks
     rospy.spin()
 

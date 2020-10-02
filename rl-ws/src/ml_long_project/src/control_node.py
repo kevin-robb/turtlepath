@@ -83,6 +83,7 @@ def scan_discrete(scan_val):
 def add_cmd(str_cmd):
     global command_list
     command_list.append(str_cmd)
+    print(str_cmd)
 
 def set_cmd(str_cmd):
     # interpret the command (string) and execute the given command
@@ -145,8 +146,12 @@ def execute_goal(event):
 
     if(abs(goal_position.theta)==180 or goal_position.theta ==0):
         forward = goal_position.x - current_position.x
+        if (abs(goal_position.theta)==180):
+            forward *=-1
     else:
         forward = goal_position.y - current_position.y
+        if (goal_position.theta==270):
+            forward *=-1
 
     if(delta_theta < -180):
         delta_theta += 360
@@ -156,6 +161,7 @@ def execute_goal(event):
     lin_vel = Vector3(forward, 0, 0)
     # turn around z-axis to stay within xy-plane
     ang_vel = Vector3(0, 0, delta_theta*.1)
+    #print(forward)
 
     #error_prior = error
     #integral_prior = integral
