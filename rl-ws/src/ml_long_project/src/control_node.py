@@ -29,6 +29,11 @@ initvar = True
 current_position = Pose2D(0,0,0)
 goal_position = Pose2D(0,0,0)
 
+integral_prior = 0
+error_prior = 0
+iteration_time = .1
+command_list = []
+
 def check_scan(scan_msg):
     # scan_msg.ranges is an array of 640 elements representing 
     # distance measurements in a full circle around the robot (0=fwd, CCW?)
@@ -55,9 +60,8 @@ def check_odom(odom_msg):
     #print(str(r.as_rotvec()[2] * 180/3.1))
     # Theta is positive ccw of start until 180, Theta is negative cw of start until -180
     current_position.theta = r.as_rotvec()[2]* 180/3.1
-    if(current_position.theta > 180):
-        current_position.theta -= 360
-
+    if(current_position.theta < 0):
+        current_position.theta += 360
     # 2D plane, we will stay at 0 on x,y
 
 def scan_discrete(scan_val):
@@ -76,7 +80,11 @@ def scan_discrete(scan_val):
         # far away obstacle
         return 3
 
-def get_cmd(str_cmd):
+def add_cmd(str_cmd):
+    global command_list
+    command_list.append(str_cmd)
+
+def set_cmd(str_cmd):
     # interpret the command (string) and execute the given command
     if str_cmd.data == "turn_r_90":
         set_goal(0,-90)
@@ -100,98 +108,61 @@ def set_goal(forward, theta):
 
     ## Facing Left
     if(goal_position.theta == 90.0):
-        goal_position.y -= forward
+        goal_position.y += forward
         goal_position.theta += theta
 
     ## Facing Forward
     elif(goal_position.theta == 0.0):
-        print("Here!")
         goal_position.x += forward
         goal_position.theta += theta
 
     ## Facing Right
     elif(abs(goal_position.theta) == 180.0):
-        goal_position.x += forward
+        goal_position.x -= forward
         goal_position.theta += theta
 
     ## Facing Backwards
-    elif(goal_position.theta == -90.0):
+    elif(goal_position.theta == 270.0):
         goal_position.y -= forward
         goal_position.theta += theta
 
-    if(goal_position.theta == -270.0):
-        goal_position.theta = 90
-    elif(goal_position.theta == 270):
-        goal_position.theta = -90
+    goal_position.theta = goal_position.theta%360
+
 
 def execute_goal(event):
-    global initvar
-    global current_position
-    global goal_position
+    global initvar, current_position, goal_position, integral_prior ,error_prior, iteration_time, command_list
+
+    delta_x = goal_position.x - current_position.x
+    delta_y = goal_position.y - current_position.y
+    delta_theta = goal_position.theta - current_position.theta
 
     if(initvar):
         initvar = False
         goal_position = deepcopy(current_position)
+    elif(abs(delta_x) < .1 and abs(delta_y) < .1 and abs(delta_theta) < 5):
+        if(len(command_list) > 0):
+            set_cmd(command_list.pop(0))
 
- 
-    print("Where are we")
-    print(current_position.y)
-    print(goal_position.y)
+    if(abs(goal_position.theta)==180 or goal_position.theta ==0):
+        forward = goal_position.x - current_position.x
+    else:
+        forward = goal_position.y - current_position.y
 
-    #print("How are we going to get there?")
-
-    x_dist = goal_position.x - current_position.x
-    y_dist = goal_position.y - current_position.y
-
-    forward = max(x_dist,y_dist)
-
-    angle = goal_position.theta - current_position.theta
-    if(abs(angle)>180):
-        angle = angle*-1
+    if(delta_theta < -180):
+        delta_theta += 360
+    elif(delta_theta > 180):
+        delta_theta -= 360
 
     lin_vel = Vector3(forward, 0, 0)
     # turn around z-axis to stay within xy-plane
-    ang_vel = Vector3(0, 0, angle)
-    print(lin_vel.x)
+    ang_vel = Vector3(0, 0, delta_theta*.1)
+
+    #error_prior = error
+    #integral_prior = integral
 
     cmd.linear = lin_vel
     cmd.angular = ang_vel
     command_pub.publish(cmd)
-
-def turn_r_90():
-    # 90 degree right turn
-    send_cmd(0, 1)
-    stall(1.5)
-
-def turn_r_45():
-    # 45 degree right turn
-    send_cmd(0, 1)
-    stall(0.75)
-
-def turn_l_90():
-    # 90 degree left turn
-    send_cmd(0, 1)
-    stall(1.5)
-
-def turn_l_45():
-    # 45 degree left turn
-    send_cmd(0, 1)
-    stall(0.75)
-
-def forward():
-    # move straight forwards
-    send_cmd(1, 0)
-    stall(1)
-
-def backward():
-    # move straight backwards
-    send_cmd(-1, 0)
-    stall(1)
-
-def halt():
-    # stop moving
-    send_cmd(0, 0)
-    # no stalling necessary
 
 def stall(wait_time):
     cur_time = time()
@@ -209,7 +180,7 @@ def send_cmd(fwd_spd, turn_spd):
     command_pub.publish(cmd)
 
 def main():
-    global command_pub, scan_pub
+    global command_pub, scan_pub, iteration_time
 
     # initialize node
     rospy.init_node('control_node')
@@ -223,10 +194,10 @@ def main():
     # subscribe to the lidar scan values
     rospy.Subscriber('/scan', LaserScan, check_scan, queue_size=1)
     # subscribe to custom topic /tp/cmd which is used for discrete commands
-    rospy.Subscriber('/tp/cmd', String, get_cmd, queue_size=1)
+    rospy.Subscriber('/tp/cmd', String, add_cmd, queue_size=1)
 
     rospy.Subscriber('/odom', Odometry, check_odom, queue_size=1)
-    rospy.Timer(rospy.Duration(.1), execute_goal)
+    rospy.Timer(rospy.Duration(iteration_time), execute_goal)
 
     # pump callbacks
     rospy.spin()

@@ -75,8 +75,8 @@ def update_state(timer_event):
     check_state()
 
     # tell us the current state for debug
-    print(cur_state)
-    print([fwd_scan, l_scan, rear_scan, r_scan])
+    #print(cur_state)
+    #print([fwd_scan, l_scan, rear_scan, r_scan])
 
 def main():
     global command_pub
@@ -91,8 +91,8 @@ def main():
     # format is [fwd_scan, rear_scan, l45_scan, l_scan, r45_scan, r_scan]
     rospy.Subscriber('/tp/scan', Int32MultiArray, get_scan_ranges, queue_size=1)
 
-    # Set up a timer to update robot's drive state at 4 Hz
-    rospy.Timer(rospy.Duration(secs=0.25), update_state)
+    # Set up a timer to update robot's drive state at 1 Hz
+    rospy.Timer(rospy.Duration(secs=1), update_state)
     # pump callbacks
     rospy.spin()
 
