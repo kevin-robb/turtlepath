@@ -109,8 +109,7 @@ def add_cmd(str_msg):
             command_list.append("turn_left")
             command_list.append("forward")
         elif str_msg.data == "back":
-            command_list.append("turn_180")
-            command_list.append("forward")
+            command_list.append("backward")
         print(str_msg.data)
     else:
         print("Invalid Command:" + str_msg.data)
@@ -178,6 +177,10 @@ def execute_goal(event):
     delta_x = goal_position.x - current_position.x
     delta_y = goal_position.y - current_position.y
     delta_theta = goal_position.theta - current_position.theta
+    # print("Deltas")
+    # print(delta_x)
+    # print(delta_y)
+    # print(delta_theta)
 
     # initialize with the current position as the goal.
     if(initvar):
@@ -186,10 +189,14 @@ def execute_goal(event):
 
     # if the robot is within 0.1 units of the goal in both x and y 
     #   and within 5 degrees, get the next command.
-    elif(abs(delta_x) < .1 and abs(delta_y) < .1 and abs(delta_theta) < 5):
+
+    if(abs(delta_x) < .15 and abs(delta_y) < .15 and abs(delta_theta) < 5):
+        #print("Popping!" + str(len(command_list)))
         # check if there are any commands in the queue.
         if(len(command_list) > 0):
             # pop the next command off the queue and set it to run next.
+            print(command_list)
+            
             set_cmd(command_list.pop(0))
 
     # the goal is in front or behind the robot.

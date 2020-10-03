@@ -9,7 +9,7 @@
  -->
 <launch>
   <!-- Launch our nodes that control the robot. -->
-  <node pkg="ml_long_project" type="rand_logan.py" name="rand_logan" output="screen"/>
+  <node pkg="ml_long_project" type="potential_field.py" name="pf_agent" output="screen"/>
   <node pkg="ml_long_project" type="control_node.py" name="control_node" output="screen"/>
 
   <arg name="model" default="$(env TURTLEBOT3_MODEL)" doc="model type [burger, waffle, waffle_pi]"/>
