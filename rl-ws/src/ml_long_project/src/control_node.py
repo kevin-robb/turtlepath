@@ -2,7 +2,7 @@
 
 import rospy
 from random import randint
-from time import time
+#from time import time
 from geometry_msgs.msg import Twist, Vector3, Point, Quaternion, Pose2D
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import String, Int32MultiArray
@@ -21,7 +21,7 @@ cmd = Twist()
 # boolean to perma stop the robot
 #halt = False
 # current time
-cur_time = 0
+#cur_time = 0
 
 initvar = True
 
@@ -65,10 +65,13 @@ def check_odom(odom_msg):
     # 2D plane, we will stay at 0 on x,y
 
 def scan_discrete(scan_val):
-    # turns continuous scan values into either 1, 2, or 3 to 
-    # represent dist to obstacle in a discrete format (shrink state space)
+    # Turns continuous scan values into either 1, 2, or 3 to 
+    #   represent distance to obstacles in a discrete format.
+    # The goal of this is to shrink the state space and make learning easier.
+
     if scan_val == 0:
-        # a lidar reading of 0 means it doesn't see anything
+        # a lidar reading of 0 means it doesn't see anything.
+        # group with "far away"
         return 3
     elif scan_val < 2:
         # close obstacle
@@ -103,9 +106,7 @@ def set_cmd(str_cmd):
         set_goal(0,0)
     
 def set_goal(forward, theta):
-    global goal_position
-    global current_position
-
+    global goal_position, current_position
 
     ## Facing Left
     if(goal_position.theta == 90.0):
@@ -129,9 +130,8 @@ def set_goal(forward, theta):
 
     goal_position.theta = goal_position.theta%360
 
-
 def execute_goal(event):
-    global initvar, current_position, goal_position, integral_prior ,error_prior, iteration_time, command_list
+    global initvar, current_position, goal_position, integral_prior, error_prior, iteration_time, command_list
 
     delta_x = goal_position.x - current_position.x
     delta_y = goal_position.y - current_position.y
@@ -158,54 +158,48 @@ def execute_goal(event):
     elif(delta_theta > 180):
         delta_theta -= 360
 
-    lin_vel = Vector3(forward, 0, 0)
-    # turn around z-axis to stay within xy-plane
-    ang_vel = Vector3(0, 0, delta_theta*.1)
-    #print(forward)
-
-    #error_prior = error
-    #integral_prior = integral
-
-    cmd.linear = lin_vel
-    cmd.angular = ang_vel
-    command_pub.publish(cmd)
-
-def stall(wait_time):
-    cur_time = time()
-    while time() < cur_time + wait_time:
-        pass
+    # send the command to the robot.
+    send_cmd(forward, delta_theta*.1)
 
 def send_cmd(fwd_spd, turn_spd):
-    # x-direction is forward
+    # x-direction is forward.
     lin_vel = Vector3(fwd_spd, 0, 0)
-    # turn around z-axis to stay within xy-plane
+    # turn around z-axis to stay within xy-plane.
     ang_vel = Vector3(0, 0, turn_spd)
 
     cmd.linear = lin_vel
     cmd.angular = ang_vel
     command_pub.publish(cmd)
 
+# # Unused function that might be useful later.
+# def stall(wait_time):
+#     cur_time = time()
+#     while time() < cur_time + wait_time:
+#         pass
+
 def main():
     global command_pub, scan_pub, iteration_time
 
-    # initialize node
+    # initialize node.
     rospy.init_node('control_node')
 
-    # publish command to the turtlebot
+    # publish command to the turtlebot.
     command_pub = rospy.Publisher("/cmd_vel", Twist, queue_size=1)
-    # publish scan data for agents to use as input
-    # format is [fwd_scan, rear_scan, l45_scan, l_scan, r45_scan, r_scan]
+    # publish scan data to custom topic '/tp/scan' for agents to use as input.
+    # format is [fwd_scan, rear_scan, l45_scan, l_scan, r45_scan, r_scan].
     scan_pub = rospy.Publisher("/tp/scan", Int32MultiArray, queue_size=1)
 
-    # subscribe to the lidar scan values
+    # subscribe to the lidar scan values.
     rospy.Subscriber('/scan', LaserScan, check_scan, queue_size=1)
-    # subscribe to custom topic /tp/cmd which is used for discrete commands
+    # subscribe to custom topic /tp/cmd which is used for discrete commands.
     rospy.Subscriber('/tp/cmd', String, add_cmd, queue_size=1)
-
+    # subscrive to odometry info.
     rospy.Subscriber('/odom', Odometry, check_odom, queue_size=1)
+
+    # execute commands at 1/iteration_time Hz.
     rospy.Timer(rospy.Duration(iteration_time), execute_goal)
 
-    # pump callbacks
+    # pump callbacks.
     rospy.spin()
 
 

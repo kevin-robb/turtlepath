@@ -8,7 +8,7 @@ from sensor_msgs.msg import LaserScan
 from std_msgs.msg import String, Int32MultiArray
 
 ## Global Variables
-# mobile_base velocity publisher
+# command publisher to control_node
 command_pub = None
 # String command that will be sent to the robot
 cmd_msg = String()
@@ -19,8 +19,6 @@ l45_scan = None
 l_scan = None
 r45_scan = None
 r_scan = None
-# current time
-#cur_time = 0
 # current state. can be either "init", "drive, "halt", "turn_r", "turn_l"
 cur_state = "init"
 # current forward and turn speeds
@@ -71,18 +69,19 @@ def check_state():
             send_command("forward")
 
 def send_command(keyword):
+    # Send a high-level command (string) to control_node to be executed.
     cmd_msg.data = keyword
     command_pub.publish(cmd_msg)
 
 def update_state(timer_event):
-    # at each timer step, update the state and send an action
+    # at each timer step, update the state and send an action.
     check_state()
 
-    # tell us the current state for debug
+    # tell us the current state for debug.
     print(cur_state)
     print([fwd_scan, l_scan, rear_scan, r_scan])
 
-    # don't try to do things before fwd_spd and turn_spd have been set
+    # don't try to do things before fwd_spd and turn_spd have been set.
     if cur_state == "init":
         return
 
@@ -95,7 +94,7 @@ def main():
     # publish command to the turtlebot
     command_pub = rospy.Publisher("/tp/cmd", String, queue_size=1)
 
-    # subscribe to the grouped scan values
+    # subscribe to the grouped scan values on the custom topic '/tp/scan'
     # format is [fwd_scan, rear_scan, l45_scan, l_scan, r45_scan, r_scan]
     rospy.Subscriber('/tp/scan', Int32MultiArray, get_scan_ranges, queue_size=1)
 
