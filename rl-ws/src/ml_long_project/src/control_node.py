@@ -16,6 +16,11 @@ import math
 command_pub = None
 # scan data publisher
 scan_pub = None
+# useful entries in the lidar's range for checking validity of commands
+fwd_scan = None
+rear_scan = None
+l_scan = None
+r_scan = None
 # Twist command that will be sent to the robot
 cmd = Twist()
 # boolean to perma stop the robot
@@ -23,6 +28,7 @@ cmd = Twist()
 # current time
 #cur_time = 0
 
+# boolean for checking whether robot is still in initialization
 initvar = True
 
 # Where we are and where we want to go
@@ -73,9 +79,11 @@ def scan_discrete(scan_val):
         # a lidar reading of 0 means it doesn't see anything.
         # group with "far away"
         return 3
+    ## TODO Set threshold to correspond to the adjacent vertex being occupied
     elif scan_val < 2:
         # close obstacle
         return 1
+    ## TODO Set threshold to correspond to the adjacent vertex being free but the next one occupied
     elif scan_val < 4:
         # visible obstacle
         return 2
@@ -85,74 +93,107 @@ def scan_discrete(scan_val):
 
 def add_cmd(str_cmd):
     global command_list
-    command_list.append(str_cmd)
-    print(str_cmd)
+    # commands will be either "forward", "left", "back", or "right".
+    # we need to handle turning here by creating two commands for each one.
+    if is_cmd_valid(str_cmd):
+        if str_cmd == "forward" or str_cmd == "back":
+            command_list.append(str_cmd)
+        elif str_cmd == "right":
+            command_list.append("turn_right")
+            command_list.append("forward")
+        elif str_cmd == "left":
+            command_list.append("turn_left")
+            command_list.append("forward")
+        print(str_cmd)
+    else:
+        print("Invalid Command:" + str_cmd)
+
+def is_cmd_valid(str_cmd):
+    # check to ensure a given command will not cause 
+    #   the robot to move to an occupied vertex.
+    if str_cmd == "forward":
+        return fwd_scan > 1
+    elif str_cmd == "left":
+        return l_scan > 1
+    elif str_cmd == "back":
+        return rear_scan > 1
+    elif str_cmd == "right":
+        return r_scan > 1
+    else:
+        # not a valid command
+        return False
 
 def set_cmd(str_cmd):
-    # interpret the command (string) and execute the given command
-    if str_cmd.data == "turn_r_90":
+    # interpret the command (string) and execute the given command.
+    if str_cmd.data == "turn_right":
         set_goal(0,-90)
-    if str_cmd.data == "turn_r_45":
-        set_goal(0,-45)
-    elif str_cmd.data == "turn_l_90":
+    elif str_cmd.data == "turn_left":
         set_goal(0,90)
-    elif str_cmd.data == "turn_l_45":
-        set_goal(0,45)
     elif str_cmd.data == "forward":
         set_goal(1,0)
     elif str_cmd.data == "backward":
         set_goal(-1,0)
-    elif str_cmd.data == "halt":
-        set_goal(0,0)
+    # elif str_cmd.data == "halt":
+    #     set_goal(0,0)
     
 def set_goal(forward, theta):
     global goal_position, current_position
+    ## Check current heading relative to start ("forward"),
+    # and apply the command to set a new goal position.
 
-    ## Facing Left
-    if(goal_position.theta == 90.0):
-        goal_position.y += forward
-        goal_position.theta += theta
-
-    ## Facing Forward
-    elif(goal_position.theta == 0.0):
+    # facing forward
+    if(goal_position.theta == 0.0):
         goal_position.x += forward
         goal_position.theta += theta
-
-    ## Facing Right
+    # facing left
+    elif(goal_position.theta == 90.0):
+        goal_position.y += forward
+        goal_position.theta += theta
+    # facing backward
     elif(abs(goal_position.theta) == 180.0):
         goal_position.x -= forward
         goal_position.theta += theta
-
-    ## Facing Backwards
+    # facing right
     elif(goal_position.theta == 270.0):
         goal_position.y -= forward
         goal_position.theta += theta
 
-    goal_position.theta = goal_position.theta%360
+    # normalize angle to be in range 0 to 360
+    goal_position.theta = goal_position.theta % 360
 
 def execute_goal(event):
     global initvar, current_position, goal_position, integral_prior, error_prior, iteration_time, command_list
-
+    # check how far off the robot is from the goal position and heading
     delta_x = goal_position.x - current_position.x
     delta_y = goal_position.y - current_position.y
     delta_theta = goal_position.theta - current_position.theta
 
+    # initialize with the current position as the goal.
     if(initvar):
         initvar = False
         goal_position = deepcopy(current_position)
-    elif(abs(delta_x) < .1 and abs(delta_y) < .1 and abs(delta_theta) < 5):
-        if(len(command_list) > 0):
-            set_cmd(command_list.pop(0))
 
-    if(abs(goal_position.theta)==180 or goal_position.theta ==0):
+    # if the robot is within 0.1 units of the goal in both x and y 
+    #   and within 5 degrees, get the next command.
+    elif(abs(delta_x) < .1 and abs(delta_y) < .1 and abs(delta_theta) < 5):
+        # check if there are any commands in the queue.
+        if(len(command_list) > 0):
+            # pop the next command off the queue and set it to run next.
+            next_cmd = command_list.pop(0)
+            set_cmd(next_cmd)
+
+    # the goal is in front or behind the robot.
+    if(abs(goal_position.theta) == 180 or goal_position.theta == 0):
         forward = goal_position.x - current_position.x
-        if (abs(goal_position.theta)==180):
-            forward *=-1
+        if (abs(goal_position.theta) == 180):
+            forward *= -1
+    # the goal is to the left or right of the robot.
     else:
         forward = goal_position.y - current_position.y
-        if (goal_position.theta==270):
-            forward *=-1
+        if (goal_position.theta == 270):
+            forward *= -1
 
+    # shift angles to be in the range -180 to 180
     if(delta_theta < -180):
         delta_theta += 360
     elif(delta_theta > 180):
@@ -170,12 +211,6 @@ def send_cmd(fwd_spd, turn_spd):
     cmd.linear = lin_vel
     cmd.angular = ang_vel
     command_pub.publish(cmd)
-
-# # Unused function that might be useful later.
-# def stall(wait_time):
-#     cur_time = time()
-#     while time() < cur_time + wait_time:
-#         pass
 
 def main():
     global command_pub, scan_pub, iteration_time

@@ -24,16 +24,10 @@ The message received will be an Int32MultiArray whose data object contains the l
 Agents should publish to the topic '/tp/cmd' to give commands to the robot.
 This will ensure all agents can control the robot the same way, and the state space stays manageable.
 The message to be sent should be a String whose data object contains one of the following:
-    "forward": drive forward for 1 second.
-    "backward": drive backward for 1 second.
-    "turn_r_90": turn 90 degrees right.
-    "turn_r_45": turn 45 degrees right.
-    "turn_l_90": turn 90 degrees left.
-    "turn_l_45": turn 45 degrees left.
-    "halt": stop all movement.
-
-None of this is set in stone. 
-I have not tuned the timings yet in the control_node. 
-I think we might not want to allow 45 degree turns, but rather only 90 degrees.
+    "forward": drive forward to the adjacent vertex.
+    "back": drive backward to the adjacent vertex.
+    "right": turn 90 deg right and drive to the adjacent vertex.
+    "left": turn 90 deg left and drive to the adjacent vertex.
+Movement will be stopped once sent commands have run out, as the robot does not move except while fulfilling a command.
 
 The point of all of this is to keep the interactions discrete to shrink the state space, and make sure we are being consistent with what our agents can do.
