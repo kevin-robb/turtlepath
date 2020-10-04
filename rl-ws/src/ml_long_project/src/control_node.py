@@ -99,48 +99,42 @@ def add_cmd(str_msg):
     global command_list
     # commands will be either "forward", "left", "back", or "right".
     # we need to handle turning here by creating two commands for each one.
-    if is_cmd_valid(str_msg):
-        if str_msg.data == "forward":
-            command_list.append("forward")
-        elif str_msg.data == "right":
-            command_list.append("turn_right")
-            command_list.append("forward")
-        elif str_msg.data == "left":
-            command_list.append("turn_left")
-            command_list.append("forward")
-        elif str_msg.data == "back":
-            command_list.append("backward")
-        print(str_msg.data)
+    
+    if str_msg.data == "forward":
+        command_list.append("forward")
+    elif str_msg.data == "right":
+        command_list.append("turn_right")
+        command_list.append("forward")
+    elif str_msg.data == "left":
+        command_list.append("turn_left")
+        command_list.append("forward")
+    elif str_msg.data == "back":
+        command_list.append("turn_180")
+        command_list.append("forward")
     else:
         print("Invalid Command:" + str_msg.data)
 
-def is_cmd_valid(str_msg):
-    # check to ensure a given command (String msg) will not cause 
+def is_cmd_valid(str_cmd):
+    # check to ensure a given command (string) will not cause 
     #   the robot to move to an occupied vertex.
-    if str_msg.data == "forward":
-        print("Checking scan data for command: Forward", fwd_scan)
+    if str_cmd == "forward":
+        #print("Checking scan data for command: Forward", fwd_scan)
         return fwd_scan > 1
-    elif str_msg.data == "left":
-        print("Checking scan data for command: Left", l_scan)
-        return l_scan > 1
-    elif str_msg.data == "back":
-        print("Checking scan data for command: Back", rear_scan)
-        return rear_scan > 1
-    elif str_msg.data == "right":
-        print("Checking scan data for command: Right", r_scan)
-        return r_scan > 1
+    elif str_cmd == "turn_left" or str_cmd == "turn_right" or str_cmd == "turn_180":
+        #print("Turning in place")
+        return True
     else:
         # not a valid command
         return False
 
 def set_cmd(str_cmd):
     # interpret the command (string) and execute the given command.
-    if str_cmd == "turn_right":
+    if str_cmd == "forward":
+        set_goal(1,0)
+    elif str_cmd == "turn_right":
         set_goal(0,-90)
     elif str_cmd == "turn_left":
         set_goal(0,90)
-    elif str_cmd == "forward":
-        set_goal(1,0)
     elif str_cmd == "turn_180":
         set_goal(0,180)
     # elif str_cmd.data == "halt":
@@ -194,10 +188,11 @@ def execute_goal(event):
         #print("Popping!" + str(len(command_list)))
         # check if there are any commands in the queue.
         if(len(command_list) > 0):
-            # pop the next command off the queue and set it to run next.
+            # pop the next command off the queue and if it's valid, set it to run next.
             print(command_list)
-            
-            set_cmd(command_list.pop(0))
+            next_cmd = command_list.pop(0)
+            if is_cmd_valid(next_cmd):
+                set_cmd(next_cmd)
 
     # the goal is in front or behind the robot.
     if(abs(goal_position.theta) == 180 or goal_position.theta == 0):

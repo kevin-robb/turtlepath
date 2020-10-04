@@ -38,7 +38,7 @@ def main():
     command_pub = rospy.Publisher("/tp/cmd", String, queue_size=1)
 
     # Set up a timer to update robot's drive state at 1 Hz
-    rospy.Timer(rospy.Duration(secs=1), random_cmd)
+    rospy.Timer(rospy.Duration(secs=2), random_cmd)
 
     # pump callbacks
     rospy.spin()
