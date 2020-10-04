@@ -30,13 +30,17 @@ cmd = Twist()
 
 # boolean for checking whether robot is still in initialization
 initvar = True
-
+stall_count = 0
+stalled = False
 # Where we are and where we want to go
 current_position = Pose2D(0,0,0)
 goal_position = Pose2D(0,0,0)
+integral_prior_angle =0
+integral_prior_forward = 0
+error_prior_forward = 0
+error_prior_angle = 0
 
-integral_prior = 0
-error_prior = 0
+current_cmd = "halt"
 
 # 1/frequency of timer events
 iteration_time = .1
@@ -118,10 +122,10 @@ def is_cmd_valid(str_cmd):
     # check to ensure a given command (string) will not cause 
     #   the robot to move to an occupied vertex.
     if str_cmd == "forward":
-        #print("Checking scan data for command: Forward", fwd_scan)
+        print("Checking scan data for command: Forward", fwd_scan)
         return fwd_scan > 1
     elif str_cmd == "turn_left" or str_cmd == "turn_right" or str_cmd == "turn_180":
-        #print("Turning in place")
+        print("Turning in place")
         return True
     else:
         # not a valid command
@@ -165,16 +169,18 @@ def set_goal(forward, theta):
     # normalize angle to be in range 0 to 360
     goal_position.theta = goal_position.theta % 360
 
+    if(goal_position.theta < 0):
+        goal_position.theta += 360
+
 def execute_goal(event):
-    global initvar, current_position, goal_position, integral_prior, error_prior, iteration_time, command_list
+    global initvar, current_position, goal_position, integral_prior_forward,integral_prior_angle, error_prior_forward, error_prior_angle, iteration_time, command_list,current_cmd
     # check how far off the robot is from the goal position and heading
-    delta_x = goal_position.x - current_position.x
-    delta_y = goal_position.y - current_position.y
     delta_theta = goal_position.theta - current_position.theta
-    # print("Deltas")
-    # print(delta_x)
-    # print(delta_y)
-    # print(delta_theta)
+   #print("Deltas")
+    #print(delta_x)
+    #print(delta_y)
+    #print(delta_theta)
+    #print(current_cmd)
 
     # initialize with the current position as the goal.
     if(initvar):
@@ -183,16 +189,6 @@ def execute_goal(event):
 
     # if the robot is within 0.1 units of the goal in both x and y 
     #   and within 5 degrees, get the next command.
-
-    if(abs(delta_x) < .15 and abs(delta_y) < .15 and abs(delta_theta) < 5):
-        #print("Popping!" + str(len(command_list)))
-        # check if there are any commands in the queue.
-        if(len(command_list) > 0):
-            # pop the next command off the queue and if it's valid, set it to run next.
-            print(command_list)
-            next_cmd = command_list.pop(0)
-            if is_cmd_valid(next_cmd):
-                set_cmd(next_cmd)
 
     # the goal is in front or behind the robot.
     if(abs(goal_position.theta) == 180 or goal_position.theta == 0):
@@ -203,7 +199,7 @@ def execute_goal(event):
     else:
         forward = goal_position.y - current_position.y
         if (goal_position.theta == 270):
-            forward *= -1
+            forward *= -1\
 
     # shift angles to be in the range -180 to 180
     if(delta_theta < -180):
@@ -211,8 +207,37 @@ def execute_goal(event):
     elif(delta_theta > 180):
         delta_theta -= 360
 
-    # send the command to the robot.
-    send_cmd(forward, delta_theta*.1)
+    integral_prior_forward = integral_prior_forward + forward*iteration_time
+    integral_prior_angle = integral_prior_angle + delta_theta*iteration_time
+
+    fw_pid = forward*7+ integral_prior_forward*.15 + (forward - error_prior_forward)/iteration_time * .04
+    an_pid = delta_theta*.1+ integral_prior_angle*0+ (delta_theta - error_prior_angle)/iteration_time * 0
+
+    if(current_cmd == "forward"):
+        send_cmd(fw_pid,0)
+    else:
+        send_cmd(0,an_pid)
+
+    error_prior_forward = forward
+    error_prior_angle = delta_theta
+    #print("Vel values")
+    #print(fw_pid)
+    #print(an_pid)
+
+    if((current_cmd== "forward" and abs(fw_pid) < .1) or (current_cmd != "forward" and abs(an_pid) < .1)):
+            #print("Popping!" + str(len(command_list)))
+            # check if there are any commands in the queue.
+            if(len(command_list) > 0 ):
+                # pop the next command off the queue and if it's valid, set it to run next.
+                print(command_list)
+                next_cmd = command_list.pop(0)
+                current_cmd = next_cmd
+                if is_cmd_valid(next_cmd):
+                    set_cmd(next_cmd)
+                    integral_prior_forward = 0
+                    integral_prior_angle = 0
+                    error_prior_forward = 0
+                    error_prior_angle = 0
 
 def send_cmd(fwd_spd, turn_spd):
     # x-direction is forward.
