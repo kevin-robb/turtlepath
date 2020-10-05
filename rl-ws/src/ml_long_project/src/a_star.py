@@ -8,6 +8,7 @@ from sensor_msgs.msg import LaserScan
 from std_msgs.msg import String, Int32MultiArray
 from nav_msgs.msg import OccupancyGrid
 import numpy as np
+from scipy.spatial import distance
 
 ## Global Variables
 # mobile_base velocity publisher
@@ -49,8 +50,48 @@ def check_state():
         if(len(map) > 0):
             cur_state = "plan"
         a_star(map,start_point,goal_point)
+#https://www.geeksforgeeks.org/a-search-algorithm/
+class node():
+    def __init__(self,start_point, map, link):
+        self.map = map
+        self.start_point = start_point
+        self.link = link
+        self.successors = []
+        if((start_point.x + 1)< map.shape[0]):
+            successors.append(node(Pose2D[start_point.x+1, start_point.y,0]),map,link)
+        if((start_point.x - 1) > 0):
+            successors.append(node(Pose2D[start_point.x-1, start_point.y,0]),map,link)
+        if((start_point.x + 1)< map.shape[0]):
+            successors.append(node(Pose2D[start_point.x, start_point.y+1,0]),map,link)
+        if((start_point.y - 1) > 0):
+            successors.append(node(Pose2D[start_point.x, start_point.y-1,0]),map,link)
 
 def a_star(map,start_point,goal_point):
+    node(start_point, map)
+    init_f = distance.euclidean((goal_point.x,goal_point.y), (start_point.x,start_point.y))
+    open = [(node(start_point,map,None) , init_f)]
+    closed = []
+
+    while len(open) > 0:
+        node = open.pop(0)
+        for succ in node.successors:
+            if(succ.x == goal_point.x and succ.y == goal_point.y):
+                path = []
+                path.append(succ)
+                while succ != None:
+                    path.append(succ.link)
+                    succ = succ.link
+                return path
+            g = distance.euclidean((node.x,node.y), (succ.x,succ.y))
+            h = distance.euclidean((goal_point.x,goal_point.y), (succ.x,succ.y))
+            f = g+h
+            if(succ in open):
+                # If succ f is lower on open skip
+            if(succ in closed):
+                # If succ f is lower on closed append it to open
+        closed.append(node)
+
+
     return 0
         
 def get_map(map_msg):
