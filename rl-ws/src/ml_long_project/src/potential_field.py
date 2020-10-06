@@ -51,51 +51,34 @@ def check_state():
         cur_state = "plan"
         potential_fields(global_map,start_point,goal_point)
 
-# http://www.diag.uniroma1.it/~oriolo/amr/slides/MotionPlanning3_Slides.pdf
+# http://kovan.ceng.metu.edu.tr/~asil/old/_1./wh2.html
 def potential_fields(global_map,start_point,goal_point):
     epsilon = 1
-    sigma = .2
-    l = 3
-    s = 4
-    #p0 is distance of influence and is infinite
+    n = 5
+    p0 = 3
 
     obs = []
     potentials = np.zeros(global_map.shape)
     for x in range(global_map.shape[0]):
         for y in range(global_map.shape[1]):
-            if(global_map[x,y] == 1):
-                obs.append(Pose2D(y,x,0))
-    
-    print([(o.x,o.y, global_map[x,y])for o in obs])
+            if(x != 0 and x != global_map.shape[0]-1 and y != 0 and y != global_map.shape[1]-1):
+                if(global_map[x,y] == 1):
+                    obs.append(Pose2D(x,y,0))
 
     for x in range(global_map.shape[0]):
         for y in range(global_map.shape[1]):
-            # max_repulse = 0
-            gi = [calc_g(o, Pose2D(x,y,0),l) for o in obs]
-            # ind = np.argmax(obs_dist)
-            # p_q = obs_dist[ind]
-            # repulse = n*(1/p_q - 0)*(1/(p_q*p_q)) #p0 would replace 0 term as 1/inf = 0
-            p_g = distance.euclidean((goal_point.x,goal_point.y), (x,y))
-            p_ha = .3 # estimated atm
-
-            potentials[x,y] = p_g + max(gi)+p_ha
-    
+            f_repulse = 0
+            for o in obs:
+                dist = distance.euclidean((o.x,o.y), (x,y))
+                if( dist <= p0):
+                    f = n*.5*(1/dist - 1/p0)*(1/dist - 1/p0)
+                else:
+                    f = 0
+                f_repulse += f
+            f_attract = distance.euclidean((goal_point.x,goal_point.y), (x,y)) * epsilon
+            potentials[x,y] = f_attract + f_repulse
+        
     np.savetxt("/home/lelliott/turtlepath/rl-ws/pf.csv", potentials, delimiter=",")
-
-    #print(potentials)
-
-def calc_g(obstacle_point, current_point,l):
-    x0 = obstacle_point.x
-    y0 = obstacle_point.y
-    x = current_point.x 
-    y = current_point.y
-    return (x0-l/2-x) + abs(x0-l/2-x) + (x-x0-l/2+1) + abs(x-x0-l/2+1) + (y0-l/2-y) + abs(y0-l/2-y) + (y-y0-l/2+1)+ abs(y-y0-l/2+1)
-
-def calc_p_ha(convex_region, sigma,l):
-    ret = []
-    for r in convex_region:
-        ret.append(1/(sigma + sum([calc_g(g,r,l) for g in convex_region])))
-    return ret
 
 def get_map(map_msg):
     global global_map
