@@ -5,7 +5,7 @@ from random import randint
 #from time import time
 from geometry_msgs.msg import Twist, Vector3, Point, Quaternion, Pose2D
 from sensor_msgs.msg import LaserScan
-from std_msgs.msg import String, Int32MultiArray
+from std_msgs.msg import String, Int32MultiArray, Bool
 from nav_msgs.msg import Odometry
 from scipy.spatial.transform import Rotation as R
 from copy import deepcopy
@@ -16,6 +16,8 @@ import math
 command_pub = None
 # scan data publisher
 scan_pub = None
+# publisher to request commands from the agent
+req_pub = None
 # useful entries in the lidar's range for checking validity of commands
 fwd_scan = None
 rear_scan = None
@@ -224,7 +226,12 @@ def execute_goal(event):
     #print(fw_pid)
     #print(an_pid)
 
-    if((current_cmd== "forward" and abs(fw_pid) < .1) or (current_cmd != "forward" and abs(an_pid) < .1)):
+    # if we are moving forward, check that we have basically arrived at the desired location.
+    # if we are turning, check that we have basically gotten onto the desired heading.
+    if((current_cmd == "forward" and abs(fw_pid) < .1) or (current_cmd != "forward" and abs(an_pid) < .1)):
+            # check if we should request another command
+            if len(command_list) < 2:
+                request_cmd()
             #print("Popping!" + str(len(command_list)))
             # check if there are any commands in the queue.
             if(len(command_list) > 0 ):
@@ -249,8 +256,14 @@ def send_cmd(fwd_spd, turn_spd):
     cmd.angular = ang_vel
     command_pub.publish(cmd)
 
+def request_cmd():
+    # request a command from the agent
+    req_msg = Bool()
+    req_msg.data = True
+    req_pub.publish(req_msg)
+
 def main():
-    global command_pub, scan_pub, iteration_time
+    global command_pub, scan_pub, req_pub, iteration_time
 
     # initialize node.
     rospy.init_node('control_node')
@@ -260,6 +273,8 @@ def main():
     # publish scan data to custom topic '/tp/scan' for agents to use as input.
     # format is [fwd_scan, rear_scan, l45_scan, l_scan, r45_scan, r_scan].
     scan_pub = rospy.Publisher("/tp/scan", Int32MultiArray, queue_size=1)
+    # publish to a custom topic '/tp/request' to let the agent know we are ready for another command.
+    req_pub = rospy.Publisher('/tp/request', Bool, queue_size=1)
 
     # subscribe to the lidar scan values.
     rospy.Subscriber('/scan', LaserScan, check_scan, queue_size=1)
