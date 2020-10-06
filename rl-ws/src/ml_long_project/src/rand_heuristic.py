@@ -1,11 +1,15 @@
 #!/usr/bin/env python
 
+## The Random Heuristic agent has access to the scan data provided by control_node.
+#   It will choose the cardinal direction with the most open space, and break ties
+#   randomly.
+
 import rospy
 from random import randint
 #import time
 from geometry_msgs.msg import Twist, Vector3
 from sensor_msgs.msg import LaserScan
-from std_msgs.msg import String, Int32MultiArray
+from std_msgs.msg import String, Int32MultiArray, Bool
 
 ## Global Variables
 # command publisher to control_node
@@ -37,59 +41,37 @@ def get_scan_ranges(scan_msg):
     r45_scan = scan_msg.data[4] # ~45 degrees right
     r_scan = scan_msg.data[5] # 90 degrees right
 
-def check_state():
-    global fwd_spd, turn_spd, cur_state
-    if cur_state == "init":
-        # start by going into the drive state
-        cur_state = "drive"
-        send_command("forward")
-    elif cur_state == "drive" and fwd_scan == 1:
-        # if an obstacle is in the "close" range, halt
-        cur_state = "halt"
-        send_command("forward")
-    elif cur_state == "halt":
-        # choose a random direction to turn
-        selection = randint(0, 3)
-        if selection == 0:
-            cur_state = "turn_r"
-            send_command("turn_r_90")
-        elif selection == 1:
-            cur_state = "turn_r"
-            send_command("turn_r_45")
-        elif selection == 2:
-            cur_state = "turn_l"
-            send_command("turn_l_90")
-        else:
-            cur_state = "turn_l"
-            send_command("turn_r_45")
-    elif cur_state == "turn_r" or cur_state == "turn_l":
-        # turn in place until there is free space ahead
-        if fwd_scan > 1:
-            cur_state = "drive"
-            send_command("forward")
-
 def send_command(keyword):
     # Send a high-level command (string) to control_node to be executed.
     cmd_msg.data = keyword
     command_pub.publish(cmd_msg)
 
-def update_state(timer_event):
-    # at each timer step, update the state and send an action.
-    check_state()
-
-    # tell us the current state for debug.
-    print(cur_state)
-    print([fwd_scan, l_scan, rear_scan, r_scan])
-
-    # don't try to do things before fwd_spd and turn_spd have been set.
-    if cur_state == "init":
-        return
+def update_state(req_status):
+    # determine move direction(s) with most space before obstacle
+    options = []
+    for check_dist in range(3, 0, -1):
+        if fwd_scan >= check_dist:
+            options.append("forward")
+        if rear_scan >= check_dist:
+            options.append("back")
+        if l_scan >= check_dist:
+            options.append("left")
+        if r_scan >= check_dist:
+            options.append("right")
+        if len(options) > 0:
+            break
+    # randomly choose one of the available options
+    selection = 0
+    if len(options) != 0:
+        selection = randint(0,len(options)-1)
+    print(options, selection)
+    send_command(options[selection])
 
 def main():
     global command_pub
 
     # initialize node
-    rospy.init_node('rand_kevin')
+    rospy.init_node('rand_heuristic')
 
     # publish command to the turtlebot
     command_pub = rospy.Publisher("/tp/cmd", String, queue_size=1)
@@ -97,9 +79,11 @@ def main():
     # subscribe to the grouped scan values on the custom topic '/tp/scan'
     # format is [fwd_scan, rear_scan, l45_scan, l_scan, r45_scan, r_scan]
     rospy.Subscriber('/tp/scan', Int32MultiArray, get_scan_ranges, queue_size=1)
+    # subscribe to the control_node requesting commands on the custom topic '/tp/request'
+    rospy.Subscriber('/tp/request', Bool, update_state, queue_size=1)
 
     # Set up a timer to update robot's drive state at 4 Hz
-    rospy.Timer(rospy.Duration(secs=0.25), update_state)
+    #rospy.Timer(rospy.Duration(secs=0.25), update_state)
     # pump callbacks
     rospy.spin()
 
