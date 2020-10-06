@@ -10,6 +10,7 @@ from nav_msgs.msg import OccupancyGrid
 import numpy as np
 import math
 from scipy.spatial import distance
+from getpass import getuser
 
 ## Global Variables
 # mobile_base velocity publisher
@@ -77,8 +78,8 @@ def potential_fields(global_map,start_point,goal_point):
                 f_repulse += f
             f_attract = distance.euclidean((goal_point.x,goal_point.y), (x,y)) * epsilon
             potentials[x,y] = f_attract + f_repulse
-        
-    np.savetxt("/home/lelliott/turtlepath/rl-ws/pf.csv", potentials, delimiter=",")
+    # make sure the file directory works for any user
+    np.savetxt("/home/"+getuser()+"/turtlepath/rl-ws/pf.csv", potentials, delimiter=",")
 
 def get_map(map_msg):
     global global_map
@@ -112,7 +113,7 @@ def get_map(map_msg):
     small_map = np.fliplr(np.flipud(small_map.transpose()))
     print(small_map)
     global_map = small_map
-    np.savetxt("/home/lelliott/turtlepath/rl-ws/map.csv", global_map, delimiter=",")
+    np.savetxt("/home/"+getuser()+"/turtlepath/rl-ws/map.csv", global_map, delimiter=",")
 
 
 def send_command(keyword):
