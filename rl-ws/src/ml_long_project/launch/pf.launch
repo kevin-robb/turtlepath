@@ -9,16 +9,16 @@
  -->
 <launch>
   <!-- Launch our nodes that control the robot. -->
-  <node pkg="ml_long_project" type="rand_kevin.py" name="rand_kevin" output="screen"/>
+  <node pkg="ml_long_project" type="potential_field.py" name="pf_agent" output="screen"/>
   <node pkg="ml_long_project" type="control_node.py" name="control_node" output="screen"/>
 
   <arg name="model" default="$(env TURTLEBOT3_MODEL)" doc="model type [burger, waffle, waffle_pi]"/>
 
   <!-- Name of the map to use (without path nor extension) and initial position -->
-  <arg name="map_file"       default=" $(find ml_long_project)/maps/maze.yaml"/>
-  <arg name="world_file"     default=" $(find ml_long_project)/maps/stage/maze.world"/>
-  <arg name="initial_pose_x" default="2.0"/>
-  <arg name="initial_pose_y" default="2.0"/>
+  <arg name="map_file"       default=" $(find ml_long_project)/maps/map1.yaml"/>
+  <arg name="world_file"     default=" $(find ml_long_project)/maps/stage/map1.world"/>
+  <arg name="initial_pose_x" default="-2"/> <!-- Match .world file to align up-->
+  <arg name="initial_pose_y" default="-2"/>
   <arg name="initial_pose_a" default="0.0"/>
   <arg name="open_rviz" default="true"/>
   <arg name="move_forward_only" default="false"/>
