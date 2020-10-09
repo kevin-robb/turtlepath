@@ -1,0 +1,5 @@
+<launch>
+  <!-- Heres the link to set it up for when you're confused in the future-->
+  <!-- https://github.com/ms-iot/vscode-ros/blob/master/doc/debug-support.md#launch-->
+  <node pkg="ml_long_project" type="a_star.py" name="as_agent" output="screen"/>
+</launch>

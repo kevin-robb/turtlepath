@@ -9,6 +9,7 @@ from std_msgs.msg import String, Int32MultiArray
 from nav_msgs.msg import OccupancyGrid
 import numpy as np
 from scipy.spatial import distance
+import copy
 
 ## Global Variables
 # mobile_base velocity publisher
@@ -49,51 +50,73 @@ def check_state():
         print("Planning!")
         if(len(map) > 0):
             cur_state = "plan"
-        a_star(map,start_point,goal_point)
-#https://www.geeksforgeeks.org/a-search-algorithm/
-class node():
-    def __init__(self,start_point, map, link):
-        self.map = map
-        self.start_point = start_point
-        self.link = link
-        self.successors = []
-        if((start_point.x + 1)< map.shape[0]):
-            successors.append(node(Pose2D[start_point.x+1, start_point.y,0]),map,link)
-        if((start_point.x - 1) > 0):
-            successors.append(node(Pose2D[start_point.x-1, start_point.y,0]),map,link)
-        if((start_point.x + 1)< map.shape[0]):
-            successors.append(node(Pose2D[start_point.x, start_point.y+1,0]),map,link)
-        if((start_point.y - 1) > 0):
-            successors.append(node(Pose2D[start_point.x, start_point.y-1,0]),map,link)
+        path = a_star(map,start_point,goal_point)
+        if(len(path) > 0):
+            print(path)
+            cur_state = "Execute"
 
+#https://www.researchgate.net/figure/A-search-algorithm-Pseudocode-of-the-A-search-algorithm-operating-with-open-and-closed_fig8_232085273
 def a_star(map,start_point,goal_point):
-    node(start_point, map)
     init_f = distance.euclidean((goal_point.x,goal_point.y), (start_point.x,start_point.y))
-    open = [(node(start_point,map,None) , init_f)]
+    # Format: Point, Fval, G val, Predecessor 
+    open = [(start_point, init_f , 0, [])]
     closed = []
 
     while len(open) > 0:
-        node = open.pop(0)
-        for succ in node.successors:
+        # Open must be sorted, we need the lowest cost value
+        point,f,g,predeccessor = open.pop(0)
+        closed.append((point,f,g,predeccessor))
+        if(len(open) == 0):
+            open = []
+            
+        for succ in get_succesors(point, map):
             if(succ.x == goal_point.x and succ.y == goal_point.y):
-                path = []
-                path.append(succ)
-                while succ != None:
-                    path.append(succ.link)
-                    succ = succ.link
-                return path
-            g = distance.euclidean((node.x,node.y), (succ.x,succ.y))
+                print("A* Success")
+                predeccessor.append(succ)
+                return predeccessor
+            g = 1 + g
             h = distance.euclidean((goal_point.x,goal_point.y), (succ.x,succ.y))
-            f = g+h
-            if(succ in open):
-                # If succ f is lower on open skip
-            if(succ in closed):
-                # If succ f is lower on closed append it to open
-        closed.append(node)
-
-
-    return 0
+            f = g+h                
+            # Check for duplicates in open and closed
+            dupes_closed = []
+            dupes_open = []
+            for point_dupes,f_dupes,g_dupes,predeccessor_dupes in closed :
+                if(point_dupes.x == succ.x and point_dupes.y == succ.y):
+                  dupes_closed.append((point_dupes,f_dupes,g_dupes,predeccessor_dupes))  
+            for point_dupes,f_dupes,g_dupes,predeccessor_dupes in open :
+                if(point_dupes.x == succ.x and point_dupes.y == succ.y):
+                  dupes_open.append((point_dupes,f_dupes,g_dupes,predeccessor_dupes))  
+            if(len(dupes_open) == 1 and dupes_open[0][2] > g):
+                open.remove(dupes_open[0])
+                dupes_open.pop(0)
+            if(len(dupes_closed) == 1 and dupes_closed[0][2] > g):
+                closed.remove(dupes_closed[0])
+                dupes_closed.pop(0)
+            if(len(dupes_closed) == 0 and len(dupes_open) == 0):
+                #print(predeccessor)
+                pred = copy.deepcopy(predeccessor)
+                pred.append(point)
+                open.append((succ,f,g,pred))
+    print("A* Failure")
+    return []
         
+def get_succesors(point, map):
+    succesors = []
+    if((point.x + 1) < map.shape[0]):
+        if(map[point.y,point.x+1] != 1):
+            succesors.append((Pose2D(point.x+1, point.y,0)))
+    if((point.x - 1) > 0):
+        if(map[point.y, point.x-1] != 1):
+            succesors.append((Pose2D(point.x-1, point.y,0)))
+    if((point.y + 1) < map.shape[0]):
+        if(map[point.y+1, point.x] != 1):
+            succesors.append((Pose2D(point.x, point.y+1,0)))
+    if((point.y - 1) > 0):
+        if(map[point.y-1, point.x] != 1):
+            succesors.append((Pose2D(point.x, point.y-1,0)))
+    return succesors
+
+
 def get_map(map_msg):
     global map
     #print(map_msg.info)
