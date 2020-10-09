@@ -10,6 +10,7 @@ from nav_msgs.msg import OccupancyGrid
 import numpy as np
 from scipy.spatial import distance
 import copy
+import pickle
 
 ## Global Variables
 # mobile_base velocity publisher
@@ -21,6 +22,10 @@ cmd_msg = String()
 #cur_time = 0
 # current state. can be either "init", "drive, "halt", "turn_r", "turn_l"
 cur_state = "init"
+
+# Are we training or executing?
+train = None
+map_name = ""
 
 map=[]
 start_point = Pose2D(7,7,0)
@@ -40,81 +45,64 @@ def get_scan_ranges(scan_msg):
 
 def check_state():
     global cur_state
-    global map
+    global map, train, map_name
     global start_point,goal_point
     if cur_state == "init":
         if(len(map) > 0):
             cur_state = "plan"
 
     elif cur_state == "plan":
-        print("Planning!")
-        if(len(map) > 0):
-            cur_state = "plan"
-        path = a_star(map,start_point,goal_point)
-        if(len(path) > 0):
-            print(path)
-            cur_state = "Execute"
+        # If we're not training 
+        if(not train):
+            print("Not Training!")
+            if(len(map) > 0):
+                cur_state = "plan"
+            path =[]
+            #path = a_star(map,start_point,goal_point)
+            if(len(path) > 0):
+                print(path)
+                cur_state = "Execute"
 
-#https://www.researchgate.net/figure/A-search-algorithm-Pseudocode-of-the-A-search-algorithm-operating-with-open-and-closed_fig8_232085273
-def a_star(map,start_point,goal_point):
-    init_f = distance.euclidean((goal_point.x,goal_point.y), (start_point.x,start_point.y))
-    # Format: Point, Fval, G val, Predecessor 
-    open = [(start_point, init_f , 0, [])]
-    closed = []
+        # If we are training
+        else:
+            print("Train")
+            train_sarsa(map_name, map,start_point,goal_point)
 
-    while len(open) > 0:
-        # Open must be sorted, we need the lowest cost value
-        point,f,g,predeccessor = open.pop(0)
-        closed.append((point,f,g,predeccessor))
-        if(len(open) == 0):
-            open = []
-            
-        for succ in get_succesors(point, map):
-            if(succ.x == goal_point.x and succ.y == goal_point.y):
-                print("A* Success")
-                predeccessor.append(succ)
-                return predeccessor
-            g = 1 + g
-            h = distance.euclidean((goal_point.x,goal_point.y), (succ.x,succ.y))
-            f = g+h                
-            # Check for duplicates in open and closed
-            dupes_closed = []
-            dupes_open = []
-            for point_dupes,f_dupes,g_dupes,predeccessor_dupes in closed :
-                if(point_dupes.x == succ.x and point_dupes.y == succ.y):
-                  dupes_closed.append((point_dupes,f_dupes,g_dupes,predeccessor_dupes))  
-            for point_dupes,f_dupes,g_dupes,predeccessor_dupes in open :
-                if(point_dupes.x == succ.x and point_dupes.y == succ.y):
-                  dupes_open.append((point_dupes,f_dupes,g_dupes,predeccessor_dupes))  
-            if(len(dupes_open) == 1 and dupes_open[0][2] > g):
-                open.remove(dupes_open[0])
-                dupes_open.pop(0)
-            if(len(dupes_closed) == 1 and dupes_closed[0][2] > g):
-                closed.remove(dupes_closed[0])
-                dupes_closed.pop(0)
-            if(len(dupes_closed) == 0 and len(dupes_open) == 0):
-                #print(predeccessor)
-                pred = copy.deepcopy(predeccessor)
-                pred.append(point)
-                open.append((succ,f,g,pred))
-    print("A* Failure")
-    return []
-        
-def get_succesors(point, map):
-    succesors = []
-    if((point.x + 1) < map.shape[0]):
-        if(map[point.y,point.x+1] != 1):
-            succesors.append((Pose2D(point.x+1, point.y,0)))
-    if((point.x - 1) > 0):
-        if(map[point.y, point.x-1] != 1):
-            succesors.append((Pose2D(point.x-1, point.y,0)))
-    if((point.y + 1) < map.shape[0]):
-        if(map[point.y+1, point.x] != 1):
-            succesors.append((Pose2D(point.x, point.y+1,0)))
-    if((point.y - 1) > 0):
-        if(map[point.y-1, point.x] != 1):
-            succesors.append((Pose2D(point.x, point.y-1,0)))
-    return succesors
+def train_sarsa(map_name, map,start_point, goal_point):
+    # Save out data to map_name.sarsa so we don't have to retrain on familiar maps
+    #pickle.dump(map, open("sarsa_data/"+map_name + ".sarsa","wb"))
+    # Load prior Q or init to zero
+    try:
+        q = pickle.load( open(map_name + ".sarsa", "rb" ) ) 
+    except (OSError, IOError) as e:
+        # There are states(x,y) and 4 Actions (up, down, right, left)
+        q = np.ones((map.shape[1], map.shape[0], 4))
+        q[goal_point.x, goal_point.y, 0] = 0
+        q[goal_point.x, goal_point.y, 1] = 0
+        q[goal_point.x, goal_point.y, 2] = 0
+        q[goal_point.x, goal_point.y, 3] = 0
+
+    point = start_point
+    episode = 0
+    # Episode
+    while episode < 5:
+        timeout = 0
+        point = start_point
+        # Choose A from S using policy dervied from Q (e.g. e-greedy)
+        s = 0
+        # Loop through episode
+        while timeout < 5000 and point != goal_point:
+            # Take action A, observe R,S'
+            # Choose A' from S' using policy dervied from Q (e.g. e-greedy)
+            # Q(S,A) <- Q(S,A) + alpha[R+gamma * Q(S',A')- Q(S,A)]
+            # S<- S'; A<-A';
+            s =0
+        episode +=1
+
+    pickle.dump(q, open(map_name + ".sarsa","wb"))
+
+def sarsa(map,start_point,goal_point):
+    return 0
 
 
 def get_map(map_msg):
@@ -164,10 +152,13 @@ def update_state(timer_event):
     #print([fwd_scan, l_scan, rear_scan, r_scan])
 
 def main():
-    global command_pub
+    global command_pub, train, map_name
 
     # initialize node
-    rospy.init_node('as_agent')
+    rospy.init_node('sarsa')
+    
+    train = rospy.get_param('~train')
+    map_name = rospy.get_param('~map_name')
 
     # publish command to the turtlebot
     command_pub = rospy.Publisher("/tp/cmd", String, queue_size=1)
