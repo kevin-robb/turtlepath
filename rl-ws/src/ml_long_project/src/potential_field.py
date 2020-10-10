@@ -1,11 +1,8 @@
 #!/usr/bin/env python
 
 import rospy
-from random import randint
-#import time
-from geometry_msgs.msg import Twist, Vector3, Point, Quaternion, Pose2D
-from sensor_msgs.msg import LaserScan
-from std_msgs.msg import String, Int32MultiArray
+from geometry_msgs.msg import Quaternion, Pose2D
+from std_msgs.msg import String
 from nav_msgs.msg import OccupancyGrid
 import numpy as np
 import math
@@ -18,26 +15,12 @@ command_pub = None
 # String command that will be sent to the robot
 cmd_msg = String()
 
-# current time
-#cur_time = 0
-# current state. can be either "init", "drive, "halt", "turn_r", "turn_l"
+# current state. can be either "init", "plan", "execute"
 cur_state = "init"
 
-global_map=None
+global_map = None
 start_point = Pose2D(7,7,0)
 goal_point =  Pose2D(1,1,0)
-
-def get_scan_ranges(scan_msg):
-    global fwd_scan, rear_scan, l45_scan, l_scan, r45_scan, r_scan
-    # format is [fwd_scan, rear_scan, l45_scan, l_scan, r45_scan, r_scan]
-
-    # update the important entries
-    fwd_scan = scan_msg.data[0] # directly forward
-    rear_scan = scan_msg.data[1] # directly behind
-    l45_scan = scan_msg.data[2] # ~45 degrees left
-    l_scan = scan_msg.data[3] # 90 degrees left
-    r45_scan = scan_msg.data[4] # ~45 degrees right
-    r_scan = scan_msg.data[5] # 90 degrees right
 
 def check_state():
     global cur_state
@@ -124,10 +107,6 @@ def update_state(timer_event):
     # at each timer step, update the state and send an action
     check_state()
 
-    # tell us the current state for debug
-    #print(cur_state)
-    #print([fwd_scan, l_scan, rear_scan, r_scan])
-
 def main():
     global command_pub
 
@@ -137,9 +116,7 @@ def main():
     # publish command to the turtlebot
     command_pub = rospy.Publisher("/tp/cmd", String, queue_size=1)
 
-    # subscribe to the grouped scan values
-    # format is [fwd_scan, rear_scan, l45_scan, l_scan, r45_scan, r_scan]
-    rospy.Subscriber('/tp/scan', Int32MultiArray, get_scan_ranges, queue_size=1)
+    # subscribe to the map
     rospy.Subscriber('/map', OccupancyGrid, get_map, queue_size=1)
 
     # Set up a timer to update robot's drive state at 1 Hz
