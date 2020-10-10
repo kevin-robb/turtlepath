@@ -6,7 +6,7 @@
 
 import rospy
 from random import randint
-from std_msgs.msg import String
+from std_msgs.msg import String, Bool
 
 ## Global Variables
 # command publisher to control_node
@@ -14,7 +14,7 @@ command_pub = None
 # String command that will be sent to the robot
 cmd_msg = String()
 
-def random_cmd(timer_event):
+def random_cmd(req_status):
     # randomly choose what action to take.
     selection = randint(0, 3)
     if selection == 0:
@@ -37,8 +37,11 @@ def main():
     # publish command to the turtlebot
     command_pub = rospy.Publisher("/tp/cmd", String, queue_size=1)
 
+    # subscribe to the control_node requesting commands on the custom topic '/tp/request'
+    rospy.Subscriber('/tp/request', Bool, random_cmd, queue_size=1)
+
     # Set up a timer to update robot's drive state at 1 Hz
-    rospy.Timer(rospy.Duration(secs=2), random_cmd)
+    #rospy.Timer(rospy.Duration(secs=2), random_cmd)
 
     # pump callbacks
     rospy.spin()
