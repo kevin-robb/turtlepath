@@ -2,7 +2,7 @@
 
 import rospy
 from geometry_msgs.msg import Quaternion, Pose2D
-from std_msgs.msg import String
+from std_msgs.msg import String, Bool
 from nav_msgs.msg import OccupancyGrid
 import numpy as np
 from scipy.spatial import distance
@@ -14,29 +14,107 @@ command_pub = None
 # String command that will be sent to the robot
 cmd_msg = String()
 
-# current state. can be either "init", "plan", "execute"
+# current state. can be either "init", "planning", "executing"
 cur_state = "init"
 
-map=[]
+map = []
 start_point = Pose2D(7,7,0)
 goal_point =  Pose2D(1,1,0)
+# list of Pose2Ds representing points on the path
+path = None
+# list of commands generated to follow the path
+cmds = []
 
 def check_state():
-    global cur_state
-    global map
-    global start_point,goal_point
+    global cur_state, map, start_point, goal_point, path
+    # wait until we get the map
     if cur_state == "init":
         if(len(map) > 0):
-            cur_state = "plan"
-
-    elif cur_state == "plan":
+            cur_state = "planning"
+    # plan a path using the map
+    elif cur_state == "planning":
         print("Planning!")
         if(len(map) > 0):
-            cur_state = "plan"
+            cur_state = "planning"
         path = a_star(map,start_point,goal_point)
         if(len(path) > 0):
             print(path)
-            cur_state = "execute"
+            print("Executing!")
+            # follow the path
+            path_to_cmd()
+            # wait to set the state until path_to_cmd finishes, because
+            #   we will use it to check and make sure the commands are ready.
+            cur_state = "executing"
+    #elif cur_state == "executing":
+        # don't want to do anything on loop, just let the queue of commands be run
+
+def send_next_cmd(req_status):
+    # when the next command is requested, send it and remove it from the list.
+    global cmds
+    if cur_state == "executing" and len(cmds) > 0: 
+        # only try to send a command if they are ready.
+        cmd = cmds.pop(0)
+        print("Sending command: ", cmd)
+        send_command(cmd)
+
+# turn the path (set of points) into a set of commands.
+def path_to_cmd():
+    # build up a list of commands from the path
+    global cmds
+    # keep track of the previous point in the path, since commands 
+    #   will be based on differences in path points.
+    prev_pt = None
+
+    # intermediate step: turn list of points into list of moves
+    moves = []
+    for p in path:
+        #print("entry", p.x, p.y)
+        if prev_pt is None:
+            # p is the first point
+            prev_pt = p
+        else:
+            x_diff = p.x - prev_pt.x
+            y_diff = p.y - prev_pt.y
+            moves.append((x_diff, y_diff))
+
+    # turn moves into commands
+    prev_mv = "up" # robot starts facing up on map (-y). 
+    # These directions refer to the map printed to console, not the display.
+    # The actual direction is not important, as these are relative and for comparison only.
+    for m in moves:
+        mv = ""
+        # figure out the cardinal direction of the move
+        if m[0] > 0: # moving right on map, in +x
+            mv = "right"
+        elif m[0] < 0: # moving left on map, in -x
+            mv = "left"
+        elif m[1] > 0: # moving down on map, in +y
+            mv = "down"
+        elif m[1] < 0: # moving up on map, in -y
+            mv = "up"
+        # check previous move to see which direction we are facing
+        if prev_mv == "":
+            # this is the first move
+            prev_mv = mv
+        elif prev_mv == mv:
+            # we are continuing the same way
+            cmds.append("forward")
+        elif (prev_mv == "right" and mv == "left") or (prev_mv == "left" and mv == "right") \
+            or (prev_mv == "up" and mv == "down") or (prev_mv == "down" and mv == "up"):
+            # we are going the opposite way
+            cmds.append("back")
+        elif (prev_mv == "right" and mv == "down") or (prev_mv == "down" and mv == "left") \
+            or (prev_mv == "left" and mv == "up") or (prev_mv == "up" and mv == "right"):
+            # we need to turn right since we are facing 90 deg left of where we want to go
+            cmds.append("right")
+        else:
+            # we need to turn left
+            cmds.append("left")
+        # set the current move to the prev_mv before going to the next one.
+        prev_mv = mv
+
+    print("path_to_cmd finished.")
+    print(cmds)
 
 #https://www.researchgate.net/figure/A-search-algorithm-Pseudocode-of-the-A-search-algorithm-operating-with-open-and-closed_fig8_232085273
 def a_star(map,start_point,goal_point):
@@ -124,7 +202,7 @@ def get_map(map_msg):
             if(big_y >= big_map.shape[1]):   
                 big_y = big_map.shape[1]-1
             if(big_y == 1):
-                big_y=0
+                big_y = 0
             # Add a 1 in small map if not 0
             small_map[y,x] = int( big_map[big_y,big_x] != 0)
         
@@ -138,11 +216,9 @@ def send_command(keyword):
     cmd_msg.data = keyword
     command_pub.publish(cmd_msg)
 
-
 def update_state(timer_event):
     # at each timer step, update the state and send an action
     check_state()
-
 
 def main():
     global command_pub
@@ -155,6 +231,8 @@ def main():
 
     # subscribe to the map
     rospy.Subscriber('/map', OccupancyGrid, get_map, queue_size=1)
+    # subscribe to the control_node requesting commands on the custom topic '/tp/request'
+    rospy.Subscriber('/tp/request', Bool, send_next_cmd, queue_size=1)
 
     # Set up a timer to update robot's drive state at 1 Hz
     rospy.Timer(rospy.Duration(secs=.25), update_state)
