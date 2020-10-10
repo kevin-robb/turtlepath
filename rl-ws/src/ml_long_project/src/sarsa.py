@@ -67,7 +67,10 @@ def check_state():
         # If we are training
         else:
             print("Train")
-            train_sarsa(map_name, map,start_point,goal_point)
+            path = train_sarsa(map_name, map,start_point,goal_point)
+            if(len(path) > 0):
+                print(path)
+                cur_state = "Execute"
 
 def train_sarsa(map_name, map,start_point, goal_point):
     alpha = .5
@@ -89,7 +92,7 @@ def train_sarsa(map_name, map,start_point, goal_point):
 
     episode = 0
     # Episode
-    while episode < 5:
+    while episode < 5000:
         timeout = 0
         path = []
         # a is action
@@ -119,7 +122,6 @@ def train_sarsa(map_name, map,start_point, goal_point):
         episode +=1
 
     pickle.dump(q, open(map_name + ".sarsa","wb"))
-    print(path)
     return path
 
 def sarsa(map,start_point,goal_point):
@@ -137,28 +139,28 @@ def execute(action, state, map):
     # IMPORTANT: Execute does not factor in heading. It is only based on finding a coordinate path similar to A* and Potential Fields
     # Ie North goes up a y val, South decrements etc
     # Reward is always -1. Unless it tries to go into a wall, it doesn't move and gets a -5
-    if(action == 0): # North
+    if(action == 1): # East
         if((state.x + 1) < map.shape[0] and map[state.y,state.x+1] != 1):
             r = -1
             s_prime = Pose2D(state.x + 1,state.y,0)
         else: 
             s_prime = state 
             r = -5
-    elif(action == 1): # East
+    elif(action == 2): # South
         if((state.y + 1) < map.shape[0] and map[state.y+1, state.x] != 1):
             r = -1
             s_prime = Pose2D(state.x,state.y+1,0)
         else: 
             s_prime = state 
             r = -5
-    elif(action == 2): # South
+    elif(action == 3): # West
         if((state.x - 1) > 0 and map[state.y, state.x-1] != 1):
             r = -1
             s_prime = Pose2D(state.x -1,state.y,0)
         else: 
             s_prime = state 
             r = -5    
-    else: # West
+    else: # North
         if((state.y - 1) > 0 and map[state.y-1, state.x] != 1):
             r = -1
             s_prime = Pose2D(state.x,state.y-1,0)
