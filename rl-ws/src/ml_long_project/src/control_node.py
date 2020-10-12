@@ -42,6 +42,7 @@ integral_prior_forward = 0
 error_prior_forward = 0
 error_prior_angle = 0
 
+# keep track of the command currently being executed
 current_cmd = "halt"
 
 # 1/frequency of timer events
@@ -90,7 +91,7 @@ def scan_discrete(scan_val):
         # group with "far away"
         return 3
     ## TODO Set threshold to correspond to the adjacent vertex being occupied
-    elif scan_val < 1.1:
+    elif scan_val < 1.2:
         # close obstacle
         return 1
     ## TODO Set threshold to correspond to the adjacent vertex being free but the next one occupied
@@ -103,28 +104,44 @@ def scan_discrete(scan_val):
 
 def add_cmd(str_msg):
     global command_list
-    # commands will be either "forward", "left", "back", or "right".
+    # commands will be either "north", "south", "east", or "west".
     # we need to handle turning here by creating two commands for each one.
     
-    if str_msg.data == "forward":
-        command_list.append("forward")
-    elif str_msg.data == "right":
-        command_list.append("turn_right")
-        command_list.append("forward")
-    elif str_msg.data == "left":
-        command_list.append("turn_left")
-        command_list.append("forward")
-    elif str_msg.data == "back":
+    # first determine the amount we need to turn to get 
+    #   from current heading to the desired heading.
+    # goal_position.theta keeps track of the heading we 
+    #   currently have or are actively trying to get onto.
+    if str_msg.data == "north" and goal_position.theta == 0 \
+        or str_msg.data == "east" and goal_position.theta == 270 \
+        or str_msg.data == "south" and goal_position.theta == 180 \
+        or str_msg.data == "west" and goal_position.theta == 90:
+        # we are already facing the right way.
+        pass
+    elif str_msg.data == "north" and goal_position.theta == 180 \
+        or str_msg.data == "east" and goal_position.theta == 90 \
+        or str_msg.data == "south" and goal_position.theta == 0 \
+        or str_msg.data == "west" and goal_position.theta == 270:
+        # we are facing the opposite way.
         command_list.append("turn_180")
-        command_list.append("forward")
-    elif str_msg.data == "turn_right":
+    elif str_msg.data == "north" and goal_position.theta == 90 \
+        or str_msg.data == "west" and goal_position.theta == 180 \
+        or str_msg.data == "south" and goal_position.theta == 270 \
+        or str_msg.data == "east" and goal_position.theta == 0:
+        # we need to turn right
         command_list.append("turn_right")
-    elif str_msg.data == "turn_left":
+    elif str_msg.data == "north" and goal_position.theta == 270 \
+        or str_msg.data == "east" and goal_position.theta == 180 \
+        or str_msg.data == "south" and goal_position.theta == 90 \
+        or str_msg.data == "west" and goal_position.theta == 0:
+        # we need to turn left
         command_list.append("turn_left")
-    elif str_msg.data == "turn_180":
-        command_list.append("turn_180")
     else:
         print("Invalid Command:" + str_msg.data)
+        return
+    
+    # the robot has now been told to turn the correct way. Next, move.
+    command_list.append("forward")
+
 
 def is_cmd_valid(str_cmd):
     # check to ensure a given command (string) will not cause 
