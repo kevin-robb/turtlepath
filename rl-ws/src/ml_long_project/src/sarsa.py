@@ -69,13 +69,12 @@ def check_state():
             print("Train")
             path = train_sarsa(map_name, map,start_point,goal_point)
             if(len(path) > 0):
-                print(path)
                 cur_state = "Execute"
 
 def train_sarsa(map_name, map,start_point, goal_point):
     alpha = .5
     gamma = .9
-    eps  = .1
+    eps  = .2
 
     # Save out data to map_name.sarsa so we don't have to retrain on familiar maps
     #pickle.dump(map, open("sarsa_data/"+map_name + ".sarsa","wb"))
@@ -90,37 +89,46 @@ def train_sarsa(map_name, map,start_point, goal_point):
         q[goal_point.x, goal_point.y, 2] = 0
         q[goal_point.x, goal_point.y, 3] = 0
 
-    episode = 0
     # Episode
-    while episode < 5000:
-        timeout = 0
-        path = []
-        # a is action
-        # 0 is North
-        # 1 is East
-        # 2 is South
-        # 3 is West
-        # s is state and equals a point in the map
-        s = start_point
-        # Choose A from S using policy dervied from Q (e.g. e-greedy)
-        a = e_greedy(eps, q, s)
-        path.append(a)
-        # Loop through episode
-        while timeout < 5000 and s != goal_point:
-            # Take action A, observe R,S'
-            r, s_prime = execute(a,s,map)
-            
-            # Choose A' from S' using policy dervied from Q (e.g. e-greedy)
-            a_prime = e_greedy(eps, q, s_prime)
+    count = 0
+    # Want to see the path every certain number of episodes
+    while count < 10:
+        episode = 0
+        if(count == 9):
+            print("Turning off epsilon for max greedy")
+            eps  = 0
 
-            # Q(S,A) <- Q(S,A) + alpha[R+gamma * Q(S',A')- Q(S,A)]
-            q[s.x,s.y,a] = q[s.x,s.y,a] + alpha * (r+gamma*q[s_prime.x,s_prime.y,a_prime] - q[s.x,s.y,a])
-            # S<- S'; A<-A';
-            s = s_prime
-            a = a_prime
+        while episode < 5000:
+            timeout = 0
+            path = []
+            # a is action
+            # 0 is North
+            # 1 is East
+            # 2 is South
+            # 3 is West
+            # s is state and equals a point in the map
+            s = start_point
+            # Choose A from S using policy dervied from Q (e.g. e-greedy)
+            a = e_greedy(eps, q, s)
             path.append(a)
-        episode +=1
+            # Loop through episode
+            while timeout < 5000 and s != goal_point:
+                # Take action A, observe R,S'
+                r, s_prime = execute(a,s,map)
+                
+                # Choose A' from S' using policy dervied from Q (e.g. e-greedy)
+                a_prime = e_greedy(eps, q, s_prime)
 
+                # Q(S,A) <- Q(S,A) + alpha[R+gamma * Q(S',A')- Q(S,A)]
+                q[s.x,s.y,a] = q[s.x,s.y,a] + alpha * (r+gamma*q[s_prime.x,s_prime.y,a_prime] - q[s.x,s.y,a])
+                # S<- S'; A<-A';
+                s = s_prime
+                a = a_prime
+                path.append(a)
+            episode +=1
+
+        print(path)
+        count +=1
     pickle.dump(q, open(map_name + ".sarsa","wb"))
     return path
 
