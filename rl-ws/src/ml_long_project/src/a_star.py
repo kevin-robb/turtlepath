@@ -76,6 +76,7 @@ def path_to_cmd():
             x_diff = p.x - prev_pt.x
             y_diff = p.y - prev_pt.y
             moves.append((x_diff, y_diff))
+            prev_pt = p
 
     # turn moves into commands.
     # robot starts facing up on map (-y). 
@@ -112,6 +113,7 @@ def a_star(map,start_point,goal_point):
         for succ in get_succesors(point, map):
             if(succ.x == goal_point.x and succ.y == goal_point.y):
                 print("A* Success")
+                predeccessor.append(point)
                 predeccessor.append(succ)
                 return predeccessor
             g = 1 + g
