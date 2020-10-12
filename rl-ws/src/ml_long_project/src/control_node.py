@@ -117,6 +117,12 @@ def add_cmd(str_msg):
     elif str_msg.data == "back":
         command_list.append("turn_180")
         command_list.append("forward")
+    elif str_msg.data == "turn_right":
+        command_list.append("turn_right")
+    elif str_msg.data == "turn_left":
+        command_list.append("turn_left")
+    elif str_msg.data == "turn_180":
+        command_list.append("turn_180")
     else:
         print("Invalid Command:" + str_msg.data)
 
