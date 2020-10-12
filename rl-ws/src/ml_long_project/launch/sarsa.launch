@@ -8,11 +8,11 @@
   - rviz view
  -->
 <launch>
-  <!-- Launch our nodes that control the robot.
+  <!-- Launch our nodes that control the robot. -->
   <node pkg="ml_long_project" type="sarsa.py" name="sarsa" output="screen">
-    <param name="~train" value="true" />
+    <param name="~train" value="false" />
     <param name="map_name" value="map1" />
-  </node> -->
+  </node>
   <node pkg="ml_long_project" type="control_node.py" name="control_node" output="screen"/>
 
   <arg name="model" default="$(env TURTLEBOT3_MODEL)" doc="model type [burger, waffle, waffle_pi]"/>

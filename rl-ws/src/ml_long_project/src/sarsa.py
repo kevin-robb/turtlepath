@@ -5,7 +5,7 @@ from random import randint
 #import time
 from geometry_msgs.msg import Twist, Vector3, Point, Quaternion, Pose2D
 from sensor_msgs.msg import LaserScan
-from std_msgs.msg import String, Int32MultiArray
+from std_msgs.msg import String, Int32MultiArray, Bool
 from nav_msgs.msg import OccupancyGrid
 import numpy as np
 from scipy.spatial import distance
@@ -31,6 +31,8 @@ map_name = ""
 map=[]
 start_point = Pose2D(7,7,0)
 goal_point =  Pose2D(1,1,0)
+path = []
+cmds = []
 
 def get_scan_ranges(scan_msg):
     global fwd_scan, rear_scan, l45_scan, l_scan, r45_scan, r_scan
@@ -47,31 +49,59 @@ def get_scan_ranges(scan_msg):
 def check_state():
     global cur_state
     global map, train, map_name
-    global start_point,goal_point
+    global start_point,goal_point, path, cmds
     if cur_state == "init":
         if(len(map) > 0):
             cur_state = "plan"
 
     elif cur_state == "plan":
-        # If we're not training 
-        if(not train):
-            print("Not Training!")
-            if(len(map) > 0):
-                cur_state = "plan"
-            path =[]
-            #path = a_star(map,start_point,goal_point)
-            if(len(path) > 0):
-                print(path)
-                cur_state = "Execute"
+        print("Train? " + str(train))
+        path = train_sarsa(map_name, map,start_point,goal_point,train)
+        if(len(path) > 0):
+            cur_state = "execute"
+            path_to_cmd()
+    elif(cur_state == 'execute'):
+        print ("Executing learned path")
+        print(path)
+        print(cmds)
+        cur_state = 'done'
 
-        # If we are training
-        else:
-            print("Train")
-            path = train_sarsa(map_name, map,start_point,goal_point)
-            if(len(path) > 0):
-                cur_state = "Execute"
+def send_next_cmd(req_status):
+    # when the next command is requested, send it and remove it from the list.
+    global cmds
+    if cur_state == "done" and len(cmds) > 0: 
+        # only try to send a command if they are ready.
+        cmd = cmds.pop(0)
+        print("Sending command: ", cmd)
+        send_command(cmd)
 
-def train_sarsa(map_name, map,start_point, goal_point):
+# turn the path (set of points) into a set of commands.
+def path_to_cmd():
+    # build up a list of commands from the path
+    global cmds,path
+    cmds = []
+    while len(path) > 0:
+        next = path.pop(0)
+        if next == 0:
+            cmds.append("forward")
+        elif next == 1:
+            cmds.append("turn_right")
+            cmds.append("forward")
+            cmds.append("turn_left")
+        elif next == 3:
+            cmds.append("turn_left")
+            cmds.append("forward")
+            cmds.append("turn_right")
+        elif next == 2:
+            cmds.append("turn_180")
+            cmds.append("forward")
+            cmds.append("turn_180")
+  
+    print("path_to_cmd finished.")
+    print(cmds)
+
+
+def train_sarsa(map_name, map,start_point, goal_point, train):
     alpha = .5
     gamma = .9
     eps  = .2
@@ -92,13 +122,20 @@ def train_sarsa(map_name, map,start_point, goal_point):
     # Episode
     count = 0
     # Want to see the path every certain number of episodes
-    while count < 10:
+    if(train):
+        count_num = 10
+        episode_num = 5000
+    else:
+        count_num = 1
+        episode_num = 1
+
+    while count < count_num:
         episode = 0
-        if(count == 9):
+        if(count == count_num-1):
             print("Turning off epsilon for max greedy")
             eps  = 0
 
-        while episode < 5000:
+        while episode < episode_num:
             timeout = 0
             path = []
             # a is action
@@ -145,7 +182,7 @@ def e_greedy(eps, q, s):
 
 def execute(action, state, map):
     # IMPORTANT: Execute does not factor in heading. It is only based on finding a coordinate path similar to A* and Potential Fields
-    # Ie North goes up a y val, South decrements etc
+    # Ie North goes down a y val, East increments x etc
     # Reward is always -1. Unless it tries to go into a wall, it doesn't move and gets a -5
     if(action == 1): # East
         if((state.x + 1) < map.shape[0] and map[state.y,state.x+1] != 1):
@@ -240,6 +277,7 @@ def main():
     # format is [fwd_scan, rear_scan, l45_scan, l_scan, r45_scan, r_scan]
     rospy.Subscriber('/tp/scan', Int32MultiArray, get_scan_ranges, queue_size=1)
     rospy.Subscriber('/map', OccupancyGrid, get_map, queue_size=1)
+    rospy.Subscriber('/tp/request', Bool, send_next_cmd, queue_size=1)
 
     # Set up a timer to update robot's drive state at 1 Hz
     rospy.Timer(rospy.Duration(secs=.25), update_state)
