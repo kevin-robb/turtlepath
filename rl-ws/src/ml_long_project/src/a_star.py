@@ -19,7 +19,7 @@ cur_state = "init"
 
 map = []
 start_point = Pose2D(7,7,0)
-goal_point =  Pose2D(2,6,0)
+goal_point =  Pose2D(2,3,0) #Pose2D(1,1,0)
 # list of Pose2Ds representing points on the path
 path = None
 # list of commands generated to follow the path
@@ -83,16 +83,16 @@ def path_to_cmd():
     # The actual direction is not important, as long as the coord system matches control_node.
     for m in moves:
         # figure out the cardinal direction of the move
-        if m[0] > 0: # moving right on map, in +x
+        if m[0] > 0.001: # moving right on map, in +x
             cmds.append("east")
-        elif m[0] < 0: # moving left on map, in -x
+        elif m[0] < -0.001: # moving left on map, in -x
             cmds.append("west")
-        elif m[1] > 0: # moving down on map, in +y
+        elif m[1] > 0.001: # moving down on map, in +y
             cmds.append("south")
-        elif m[1] < 0: # moving up on map, in -y
+        elif m[1] < -0.001: # moving up on map, in -y
             cmds.append("north")
 
-    print("path_to_cmd finished.")
+    print("-------------------path_to_cmd finished-------------------------")
     print(cmds)
 
 #https://www.researchgate.net/figure/A-search-algorithm-Pseudocode-of-the-A-search-algorithm-operating-with-open-and-closed_fig8_232085273

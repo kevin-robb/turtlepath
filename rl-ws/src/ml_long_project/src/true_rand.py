@@ -18,13 +18,13 @@ def random_cmd(req_status):
     # randomly choose what action to take.
     selection = randint(0, 3)
     if selection == 0:
-        cmd_msg.data = "forward"
+        cmd_msg.data = "north"
     elif selection == 1:
-        cmd_msg.data = "back"
+        cmd_msg.data = "south"
     elif selection == 2:
-        cmd_msg.data = "right"
+        cmd_msg.data = "east"
     else: # selection == 3
-        cmd_msg.data = "left"
+        cmd_msg.data = "west"
     # send the high-level command to control_node to be executed.
     command_pub.publish(cmd_msg)
 

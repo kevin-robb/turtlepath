@@ -147,7 +147,7 @@ def is_cmd_valid(str_cmd):
     # check to ensure a given command (string) will not cause 
     #   the robot to move to an occupied vertex.
     if str_cmd == "forward":
-        print("Checking scan data for command: Forward", fwd_scan)
+        print("Trying to Move Forward", fwd_scan)
         return fwd_scan > 1
     elif str_cmd == "turn_left" or str_cmd == "turn_right" or str_cmd == "turn_180":
         print("Turning in place")
@@ -259,7 +259,7 @@ def execute_goal(event):
             # check if there are any commands in the queue.
             if(len(command_list) > 0 ):
                 # pop the next command off the queue and if it's valid, set it to run next.
-                print(command_list)
+                #print(command_list)
                 next_cmd = command_list.pop(0)
                 current_cmd = next_cmd
                 if is_cmd_valid(next_cmd):
