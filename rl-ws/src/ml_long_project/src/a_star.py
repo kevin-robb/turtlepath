@@ -9,7 +9,7 @@ from scipy.spatial import distance
 import copy
 
 ## Global Variables
-# mobile_base velocity publisher
+# String command publisher
 command_pub = None
 # String command that will be sent to the robot
 cmd_msg = String()
@@ -19,7 +19,7 @@ cur_state = "init"
 
 map = []
 start_point = Pose2D(7,7,0)
-goal_point =  Pose2D(1,1,0)
+goal_point =  Pose2D(3,8,0) # was initially Pose2D(1,1,0)
 # list of Pose2Ds representing points on the path
 path = None
 # list of commands generated to follow the path
@@ -76,44 +76,24 @@ def path_to_cmd():
             x_diff = p.x - prev_pt.x
             y_diff = p.y - prev_pt.y
             moves.append((x_diff, y_diff))
+            prev_pt = p
 
-    # turn moves into commands
-    prev_mv = "up" # robot starts facing up on map (-y). 
+    # turn moves into commands.
+    # robot starts facing up on map (-y). 
     # These directions refer to the map printed to console, not the display.
-    # The actual direction is not important, as these are relative and for comparison only.
+    # The actual direction is not important, as long as the coord system matches control_node.
     for m in moves:
-        mv = ""
         # figure out the cardinal direction of the move
-        if m[0] > 0: # moving right on map, in +x
-            mv = "right"
-        elif m[0] < 0: # moving left on map, in -x
-            mv = "left"
-        elif m[1] > 0: # moving down on map, in +y
-            mv = "down"
-        elif m[1] < 0: # moving up on map, in -y
-            mv = "up"
-        # check previous move to see which direction we are facing
-        if prev_mv == "":
-            # this is the first move
-            prev_mv = mv
-        elif prev_mv == mv:
-            # we are continuing the same way
-            cmds.append("forward")
-        elif (prev_mv == "right" and mv == "left") or (prev_mv == "left" and mv == "right") \
-            or (prev_mv == "up" and mv == "down") or (prev_mv == "down" and mv == "up"):
-            # we are going the opposite way
-            cmds.append("back")
-        elif (prev_mv == "right" and mv == "down") or (prev_mv == "down" and mv == "left") \
-            or (prev_mv == "left" and mv == "up") or (prev_mv == "up" and mv == "right"):
-            # we need to turn right since we are facing 90 deg left of where we want to go
-            cmds.append("right")
-        else:
-            # we need to turn left
-            cmds.append("left")
-        # set the current move to the prev_mv before going to the next one.
-        prev_mv = mv
+        if m[0] > 0.001: # moving right on map, in +x
+            cmds.append("east")
+        elif m[0] < -0.001: # moving left on map, in -x
+            cmds.append("west")
+        elif m[1] > 0.001: # moving down on map, in +y
+            cmds.append("south")
+        elif m[1] < -0.001: # moving up on map, in -y
+            cmds.append("north")
 
-    print("path_to_cmd finished.")
+    print("-------------------path_to_cmd finished-------------------------")
     print(cmds)
 
 #https://www.researchgate.net/figure/A-search-algorithm-Pseudocode-of-the-A-search-algorithm-operating-with-open-and-closed_fig8_232085273
@@ -133,6 +113,7 @@ def a_star(map,start_point,goal_point):
         for succ in get_succesors(point, map):
             if(succ.x == goal_point.x and succ.y == goal_point.y):
                 print("A* Success")
+                predeccessor.append(point)
                 predeccessor.append(succ)
                 return predeccessor
             g = 1 + g

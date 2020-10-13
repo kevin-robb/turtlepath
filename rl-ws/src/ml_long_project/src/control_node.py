@@ -25,10 +25,6 @@ l_scan = None
 r_scan = None
 # Twist command that will be sent to the robot
 cmd = Twist()
-# boolean to perma stop the robot
-#halt = False
-# current time
-#cur_time = 0
 
 # boolean for checking whether robot is still in initialization
 initvar = True
@@ -37,11 +33,12 @@ stalled = False
 # Where we are and where we want to go
 current_position = Pose2D(0,0,0)
 goal_position = Pose2D(0,0,0)
-integral_prior_angle =0
+integral_prior_angle = 0
 integral_prior_forward = 0
 error_prior_forward = 0
 error_prior_angle = 0
 
+# keep track of the command currently being executed
 current_cmd = "halt"
 
 # 1/frequency of timer events
@@ -89,13 +86,11 @@ def scan_discrete(scan_val):
         # a lidar reading of 0 means it doesn't see anything.
         # group with "far away"
         return 3
-    ## TODO Set threshold to correspond to the adjacent vertex being occupied
-    elif scan_val < 1.1:
-        # close obstacle
+    elif scan_val < 1.4:
+        # close obstacle (adjacent vertex is occupied)
         return 1
-    ## TODO Set threshold to correspond to the adjacent vertex being free but the next one occupied
     elif scan_val < 3:
-        # visible obstacle
+        # visible obstacle, but not at the adjacent vertex
         return 2
     else:
         # far away obstacle
@@ -103,34 +98,50 @@ def scan_discrete(scan_val):
 
 def add_cmd(str_msg):
     global command_list
-    # commands will be either "forward", "left", "back", or "right".
+    # commands will be either "north", "south", "east", or "west".
     # we need to handle turning here by creating two commands for each one.
     
-    if str_msg.data == "forward":
-        command_list.append("forward")
-    elif str_msg.data == "right":
-        command_list.append("turn_right")
-        command_list.append("forward")
-    elif str_msg.data == "left":
-        command_list.append("turn_left")
-        command_list.append("forward")
-    elif str_msg.data == "back":
+    # first determine the amount we need to turn to get 
+    #   from current heading to the desired heading.
+    # goal_position.theta keeps track of the heading we 
+    #   currently have or are actively trying to get onto.
+    if str_msg.data == "north" and goal_position.theta == 0 \
+        or str_msg.data == "east" and goal_position.theta == 270 \
+        or str_msg.data == "south" and goal_position.theta == 180 \
+        or str_msg.data == "west" and goal_position.theta == 90:
+        # we are already facing the right way.
+        pass
+    elif str_msg.data == "north" and goal_position.theta == 180 \
+        or str_msg.data == "east" and goal_position.theta == 90 \
+        or str_msg.data == "south" and goal_position.theta == 0 \
+        or str_msg.data == "west" and goal_position.theta == 270:
+        # we are facing the opposite way.
         command_list.append("turn_180")
-        command_list.append("forward")
-    elif str_msg.data == "turn_right":
+    elif str_msg.data == "north" and goal_position.theta == 90 \
+        or str_msg.data == "west" and goal_position.theta == 180 \
+        or str_msg.data == "south" and goal_position.theta == 270 \
+        or str_msg.data == "east" and goal_position.theta == 0:
+        # we need to turn right
         command_list.append("turn_right")
-    elif str_msg.data == "turn_left":
+    elif str_msg.data == "north" and goal_position.theta == 270 \
+        or str_msg.data == "east" and goal_position.theta == 180 \
+        or str_msg.data == "south" and goal_position.theta == 90 \
+        or str_msg.data == "west" and goal_position.theta == 0:
+        # we need to turn left
         command_list.append("turn_left")
-    elif str_msg.data == "turn_180":
-        command_list.append("turn_180")
     else:
         print("Invalid Command:" + str_msg.data)
+        return
+    
+    # the robot has now been told to turn the correct way. Next, move.
+    command_list.append("forward")
+
 
 def is_cmd_valid(str_cmd):
     # check to ensure a given command (string) will not cause 
     #   the robot to move to an occupied vertex.
     if str_cmd == "forward":
-        print("Checking scan data for command: Forward", fwd_scan)
+        print("Trying to Move Forward", fwd_scan)
         return fwd_scan > 1
     elif str_cmd == "turn_left" or str_cmd == "turn_right" or str_cmd == "turn_180":
         print("Turning in place")
@@ -149,27 +160,25 @@ def set_cmd(str_cmd):
         set_goal(0,90)
     elif str_cmd == "turn_180":
         set_goal(0,180)
-    # elif str_cmd.data == "halt":
-    #     set_goal(0,0)
     
 def set_goal(forward, theta):
     global goal_position, current_position
     ## Check current heading relative to start ("forward"),
     # and apply the command to set a new goal position.
 
-    # facing forward
+    # facing forward (north)
     if(goal_position.theta == 0.0):
         goal_position.x += forward
         goal_position.theta += theta
-    # facing left
+    # facing left (west)
     elif(goal_position.theta == 90.0):
         goal_position.y += forward
         goal_position.theta += theta
-    # facing backward
+    # facing backward (south)
     elif(abs(goal_position.theta) == 180.0):
         goal_position.x -= forward
         goal_position.theta += theta
-    # facing right
+    # facing right (east)
     elif(goal_position.theta == 270.0):
         goal_position.y -= forward
         goal_position.theta += theta
@@ -184,11 +193,6 @@ def execute_goal(event):
     global initvar, current_position, goal_position, integral_prior_forward,integral_prior_angle, error_prior_forward, error_prior_angle, iteration_time, command_list,current_cmd
     # check how far off the robot is from the goal position and heading
     delta_theta = goal_position.theta - current_position.theta
-   #print("Deltas")
-    #print(delta_x)
-    #print(delta_y)
-    #print(delta_theta)
-    #print(current_cmd)
 
     # initialize with the current position as the goal.
     if(initvar):
@@ -198,15 +202,15 @@ def execute_goal(event):
     # if the robot is within 0.1 units of the goal in both x and y 
     #   and within 5 degrees, get the next command.
 
-    # the goal is in front or behind the robot.
+    # robot is facing (or is turning to face) south or north
     if(abs(goal_position.theta) == 180 or goal_position.theta == 0):
         forward = goal_position.x - current_position.x
         if (abs(goal_position.theta) == 180):
             forward *= -1
-    # the goal is to the left or right of the robot.
+    # robot is facing (or is turning to face) east or west
     else:
         forward = goal_position.y - current_position.y
-        if (goal_position.theta == 270):
+        if (goal_position.theta == 270): # facing east
             forward *= -1\
 
     # shift angles to be in the range -180 to 180
@@ -228,9 +232,6 @@ def execute_goal(event):
 
     error_prior_forward = forward
     error_prior_angle = delta_theta
-    #print("Vel values")
-    #print(fw_pid)
-    #print(an_pid)
 
     # if we are moving forward, check that we have basically arrived at the desired location.
     # if we are turning, check that we have basically gotten onto the desired heading.
@@ -238,11 +239,10 @@ def execute_goal(event):
             # check if we should request another command
             if len(command_list) < 2:
                 request_cmd()
-            #print("Popping!" + str(len(command_list)))
             # check if there are any commands in the queue.
             if(len(command_list) > 0 ):
                 # pop the next command off the queue and if it's valid, set it to run next.
-                print(command_list)
+                #print(command_list)
                 next_cmd = command_list.pop(0)
                 current_cmd = next_cmd
                 if is_cmd_valid(next_cmd):

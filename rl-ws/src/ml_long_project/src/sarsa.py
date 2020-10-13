@@ -83,19 +83,13 @@ def path_to_cmd():
     while len(path) > 0:
         next = path.pop(0)
         if next == 0:
-            cmds.append("forward")
+            cmds.append("north")
         elif next == 1:
-            cmds.append("turn_right")
-            cmds.append("forward")
-            cmds.append("turn_left")
+            cmds.append("east")
         elif next == 3:
-            cmds.append("turn_left")
-            cmds.append("forward")
-            cmds.append("turn_right")
+            cmds.append("west")
         elif next == 2:
-            cmds.append("turn_180")
-            cmds.append("forward")
-            cmds.append("turn_180")
+            cmds.append("south")
   
     print("path_to_cmd finished.")
     print(cmds)
