@@ -19,7 +19,7 @@ cur_state = "init"
 
 map = []
 start_point = Pose2D(7,7,0)
-goal_point =  Pose2D(2,3,0) #Pose2D(1,1,0)
+goal_point =  Pose2D(3,8,0) # was initially Pose2D(1,1,0)
 # list of Pose2Ds representing points on the path
 path = None
 # list of commands generated to follow the path
