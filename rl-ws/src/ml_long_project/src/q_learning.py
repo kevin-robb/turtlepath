@@ -3,9 +3,8 @@
 import rospy
 from random import randint
 #import time
-from geometry_msgs.msg import Twist, Vector3, Point, Quaternion, Pose2D
-from sensor_msgs.msg import LaserScan
-from std_msgs.msg import String, Int32MultiArray, Bool
+from geometry_msgs.msg import Quaternion, Pose2D
+from std_msgs.msg import String, Bool
 from nav_msgs.msg import OccupancyGrid
 import numpy as np
 from scipy.spatial import distance
@@ -28,23 +27,18 @@ cur_state = "init"
 train = None
 map_name = ""
 
-map=[]
+# the map and important points
+map = []
 start_point = Pose2D(7,7,0)
 goal_point =  Pose2D(1,1,0)
+# a proxy for the map identifying which cells have already been visited
+visited = []
+visited_reset = []
+
+# the generated set of points for the robot to follow
 path = []
+# the set of commands which tell the robot how to follow the path
 cmds = []
-
-def get_scan_ranges(scan_msg):
-    global fwd_scan, rear_scan, l45_scan, l_scan, r45_scan, r_scan
-    # format is [fwd_scan, rear_scan, l45_scan, l_scan, r45_scan, r_scan]
-
-    # update the important entries
-    fwd_scan = scan_msg.data[0] # directly forward
-    rear_scan = scan_msg.data[1] # directly behind
-    l45_scan = scan_msg.data[2] # ~45 degrees left
-    l_scan = scan_msg.data[3] # 90 degrees left
-    r45_scan = scan_msg.data[4] # ~45 degrees right
-    r_scan = scan_msg.data[5] # 90 degrees right
 
 def check_state():
     global cur_state
@@ -56,7 +50,7 @@ def check_state():
 
     elif cur_state == "plan":
         print("Train? " + str(train))
-        path = train_sarsa(map_name, map,start_point,goal_point,train)
+        path = train_ql(map_name, map, start_point, goal_point, train)
         if(len(path) > 0):
             cur_state = "execute"
             path_to_cmd()
@@ -95,10 +89,10 @@ def path_to_cmd():
     print(cmds)
 
 
-def train_sarsa(map_name, map,start_point, goal_point, train):
-    alpha = .05
-    gamma = .9
-    eps  = .2
+def train_ql(map_name, map, start_point, goal_point, train):
+    alpha = 0.05
+    gamma = 0.9
+    eps  = 0.2
 
     # Save out data to map_name.ql so we don't have to retrain on familiar maps
     #pickle.dump(map, open("ql_data/"+map_name + ".ql","wb"))
@@ -132,20 +126,20 @@ def train_sarsa(map_name, map,start_point, goal_point, train):
         while episode < episode_num:
             timeout = 0
             path = []
-            # a is action
-            # 0 is North
-            # 1 is East
-            # 2 is South
-            # 3 is West
-            # s is state and equals a point in the map
+            visited = visited_reset
+            # a is an action: can be 0 (North), 1 (East), 2 (South), or 3 (West)
+            # s is a state, where (s.x, s.y) is a point in the map
             s = start_point
             # Choose A from S using policy derived from Q (e.g. e-greedy)
             a = e_greedy(eps, q, s)
             path.append(a)
             # Loop through episode
             while timeout < 5000 and s != goal_point:
-                # Take action A, observe R,S'
-                r, s_prime = execute(a,s,map)
+                # mark the current state as visited
+                visited[s.x][s.y] = True
+
+                # Take action A, observe R, S'
+                r, s_prime = execute(a, s, map, visited)
                 
                 # Choose A' from S' using policy dervied from Q (e.g. e-greedy)
                 a_prime = e_greedy(eps, q, s_prime)
@@ -186,44 +180,66 @@ def e_greedy(eps, q, s):
       a = np.argmax([action for action in q[s.x,s.y]]) 
     return a
 
-def execute(action, state, map):
-    # IMPORTANT: Execute does not factor in heading. It is only based on finding a coordinate path similar to A* and Potential Fields
-    # Ie North goes down a y val, East increments x etc
-    # Reward is always -1. Unless it tries to go into a wall, it doesn't move and gets a -5.
-    # TODO punish the agent extra for repeating a move
+def execute(action, state, map, visited):
+    # Reward is -1 each timestep, with the potential for additional punishments:
+    # - Trying to move into a wall or out of bounds will fail,
+    #   the robot will not move and will incur a reward of -5.
+    # - Returning to a cell already visited this episode will work,
+    #   but will incur a reward of -5 to encourage efficient path planning.
+
     if(action == 1): # East
         if((state.x + 1) < map.shape[0] and map[state.y,state.x+1] != 1):
+            # this move is allowed
             r = -1
+            if visited[state.x + 1][state.y] == True:
+                # this cell has already been visited
+                r = -5
             s_prime = Pose2D(state.x + 1,state.y,0)
-        else: 
+        else:
+            # this move is not allowed (would move into a wall or out of bounds)
             s_prime = state 
             r = -5
     elif(action == 2): # South
         if((state.y + 1) < map.shape[0] and map[state.y+1, state.x] != 1):
+            # this move is allowed
             r = -1
+            if visited[state.x][state.y + 1] == True:
+                # this cell has already been visited
+                r = -5
             s_prime = Pose2D(state.x,state.y+1,0)
-        else: 
+        else:
+            # this move is not allowed (would move into a wall or out of bounds)
             s_prime = state 
             r = -5
     elif(action == 3): # West
         if((state.x - 1) > 0 and map[state.y, state.x-1] != 1):
+            # this move is allowed
             r = -1
+            if visited[state.x - 1][state.y] == True:
+                # this cell has already been visited
+                r = -5
             s_prime = Pose2D(state.x -1,state.y,0)
-        else: 
+        else:
+            # this move is not allowed (would move into a wall or out of bounds)
             s_prime = state 
             r = -5    
     else: # North
         if((state.y - 1) > 0 and map[state.y-1, state.x] != 1):
+            # this move is allowed
             r = -1
+            if visited[state.x][state.y - 1] == True:
+                # this cell has already been visited
+                r = -5
             s_prime = Pose2D(state.x,state.y-1,0)
-        else: 
+        else:
+            # this move is not allowed (would move into a wall or out of bounds)
             s_prime = state 
             r = -5
 
     return r, s_prime
 
 def get_map(map_msg):
-    global map
+    global map, visited_reset
     #print(map_msg.info)
     # Take in the full map and put it into numpy
     big_map = (np.asarray(map_msg.data))
@@ -255,6 +271,8 @@ def get_map(map_msg):
     print(small_map)
     map = small_map
     np.savetxt("/home/"+getuser()+"/turtlepath/rl-ws/map.csv", map, delimiter=",")
+    # create the boolean array which will denote whether a cell on the map has been visited
+    visited_reset = [[False] * map.shape[0]] * map.shape[1]
 
 
 def send_command(keyword):
@@ -278,9 +296,6 @@ def main():
     # publish command to the turtlebot
     command_pub = rospy.Publisher("/tp/cmd", String, queue_size=1)
 
-    # subscribe to the grouped scan values.
-    # format is [fwd_scan, rear_scan, l45_scan, l_scan, r45_scan, r_scan]
-    rospy.Subscriber('/tp/scan', Int32MultiArray, get_scan_ranges, queue_size=1)
     # subscribe to the map.
     rospy.Subscriber('/map', OccupancyGrid, get_map, queue_size=1)
     # subscribe to the custom topic '/tp/request', which will 
