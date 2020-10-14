@@ -21,7 +21,7 @@ cmd_msg = String()
 
 # current time
 #cur_time = 0
-# current state. can be either "init", "drive, "halt", "turn_r", "turn_l"
+# current state. can be either "init", "plan", "execute"
 cur_state = "init"
 
 # Are we training or executing?
@@ -96,15 +96,15 @@ def path_to_cmd():
 
 
 def train_sarsa(map_name, map,start_point, goal_point, train):
-    alpha = .5
+    alpha = .05
     gamma = .9
     eps  = .2
 
-    # Save out data to map_name.sarsa so we don't have to retrain on familiar maps
-    #pickle.dump(map, open("sarsa_data/"+map_name + ".sarsa","wb"))
+    # Save out data to map_name.ql so we don't have to retrain on familiar maps
+    #pickle.dump(map, open("ql_data/"+map_name + ".ql","wb"))
     # Load prior Q or init to zero
     try:
-        q = pickle.load( open(map_name + ".sarsa", "rb" ) ) 
+        q = pickle.load( open(map_name + ".ql", "rb" ) ) 
     except (OSError, IOError) as e:
         # There are states(x,y) and 4 Actions (up, down, right, left)
         q = np.ones((map.shape[1], map.shape[0], 4))
@@ -150,21 +150,33 @@ def train_sarsa(map_name, map,start_point, goal_point, train):
                 # Choose A' from S' using policy dervied from Q (e.g. e-greedy)
                 a_prime = e_greedy(eps, q, s_prime)
 
-                # Q(S,A) <- Q(S,A) + alpha[R+gamma * Q(S',A')- Q(S,A)]
-                q[s.x,s.y,a] = q[s.x,s.y,a] + alpha * (r+gamma*q[s_prime.x,s_prime.y,a_prime] - q[s.x,s.y,a])
+                # Q(S,A) <- Q(S,A) + alpha*[R + gamma * max_{any A' for S'}{Q(S',A')} - Q(S,A)]
+                q[s.x,s.y,a] = q[s.x,s.y,a] + alpha * (r+gamma*max_q(q,s_prime) - q[s.x,s.y,a])
                 # S<- S'; A<-A';
                 s = s_prime
                 a = a_prime
                 path.append(a)
+                # increment timeout and stop the episode if it goes 5000 cycles without reaching the goal
+                timeout += 1
             episode += 1
 
         print(path)
         count += 1
-    pickle.dump(q, open(map_name + ".sarsa","wb"))
+    pickle.dump(q, open(map_name + ".ql","wb"))
     return path
 
-def sarsa(map,start_point,goal_point):
-    return 0
+# def sarsa(map,start_point,goal_point):
+#     return 0
+
+def max_q(q, s_prime):
+    print("finding max q for ", s_prime.x, s_prime.y)
+    # after we take action A and arrive at state S', 
+    #   we will find the highest Q value for S' with any available action A'.
+    max_q = 0
+    for a_prime in range(4):
+        if q[s_prime.x, s_prime.y, a_prime] > max_q:
+            max_q = q[s_prime.x, s_prime.y, a_prime]
+    return max_q
 
 def e_greedy(eps, q, s):
     p = np.random.random() 
@@ -177,7 +189,8 @@ def e_greedy(eps, q, s):
 def execute(action, state, map):
     # IMPORTANT: Execute does not factor in heading. It is only based on finding a coordinate path similar to A* and Potential Fields
     # Ie North goes down a y val, East increments x etc
-    # Reward is always -1. Unless it tries to go into a wall, it doesn't move and gets a -5
+    # Reward is always -1. Unless it tries to go into a wall, it doesn't move and gets a -5.
+    # TODO punish the agent extra for repeating a move
     if(action == 1): # East
         if((state.x + 1) < map.shape[0] and map[state.y,state.x+1] != 1):
             r = -1
@@ -223,7 +236,7 @@ def get_map(map_msg):
     small_map = np.zeros((int(map_msg.info.width*resolution)+1,int(map_msg.info.width*resolution)+1))
     
     # Save it out to view at as a csv
-    #np.savetxt("/home/lelliott/turtlepath/rl-ws/demofile2.csv", big_map, delimiter=",")
+    #np.savetxt("/home/"+getuser()+"/turtlepath/rl-ws/demofile2.csv", big_map, delimiter=",")
 
     for x in range(small_map.shape[0]):
         for y in range(small_map.shape[1]):
@@ -256,18 +269,22 @@ def main():
     global command_pub, train, map_name
 
     # initialize node
-    rospy.init_node('sarsa')
+    rospy.init_node('q_learning')
     
+    # get variables from the launch file
     train = rospy.get_param('~train')
     map_name = rospy.get_param('~map_name')
 
     # publish command to the turtlebot
     command_pub = rospy.Publisher("/tp/cmd", String, queue_size=1)
 
-    # subscribe to the grouped scan values
+    # subscribe to the grouped scan values.
     # format is [fwd_scan, rear_scan, l45_scan, l_scan, r45_scan, r_scan]
     rospy.Subscriber('/tp/scan', Int32MultiArray, get_scan_ranges, queue_size=1)
+    # subscribe to the map.
     rospy.Subscriber('/map', OccupancyGrid, get_map, queue_size=1)
+    # subscribe to the custom topic '/tp/request', which will 
+    #   trigger when the control_node requests the next command.
     rospy.Subscriber('/tp/request', Bool, send_next_cmd, queue_size=1)
 
     # Set up a timer to update robot's drive state at 1 Hz

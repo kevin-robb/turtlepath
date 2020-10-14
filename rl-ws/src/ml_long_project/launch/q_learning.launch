@@ -1,0 +1,79 @@
+<!-- 
+  Turtlebot navigation simulation:
+  - stage
+  - map_server
+  - move_base
+  - static map
+  - amcl
+  - rviz view
+ -->
+<launch>
+  <!-- Launch our nodes that control the robot. -->
+  <node pkg="ml_long_project" type="q_learning.py" name="q_learning" output="screen">
+    <param name="~train" value="false" />
+    <param name="map_name" value="map1" />
+  </node>
+  <node pkg="ml_long_project" type="control_node.py" name="control_node" output="screen"/>
+
+  <arg name="model" default="$(env TURTLEBOT3_MODEL)" doc="model type [burger, waffle, waffle_pi]"/>
+
+  <!-- Name of the map to use (without path nor extension) and initial position -->
+  <arg name="map_file"       default=" $(find ml_long_project)/maps/map1.yaml"/>
+  <arg name="world_file"     default=" $(find ml_long_project)/maps/stage/map1.world"/>
+  <arg name="initial_pose_x" default="-2"/> <!-- Match .world file to align up-->
+  <arg name="initial_pose_y" default="-2"/>
+  <arg name="initial_pose_a" default="0.0"/>
+  <arg name="open_rviz" default="true"/>
+  <arg name="move_forward_only" default="false"/>
+
+  <param name="/use_sim_time" value="true"/>
+  <!--  ******************** Stage ********************  -->
+  <!-- 
+        Publishes transforms:
+          /base_link -> /base_laser
+          /base_footprint -> /base_link (identity)
+          /odom -> base_footprint
+        Publishes topics:
+          /odom : odometry data from the simulated odometry
+          /base_scan : laser data from the simulated laser
+          /base_pose_ground_truth : the ground truth pose
+        Parameters:
+          base_watchdog_timeout : time (s) after receiving the last command on cmd_vel before stopping the robot
+        Args:
+          -g : run in headless mode.
+  --> 
+  <node pkg="stage_ros" type="stageros" name="stageros" args="$(arg world_file)">
+    <param name="base_watchdog_timeout" value="0.5"/>
+    <remap from="odom" to="odom"/>
+    <remap from="base_pose_ground_truth" to="base_pose_ground_truth"/>
+    <!--<remap from="cmd_vel" to="mobile_base/commands/velocity"/>-->
+    <remap from="base_scan" to="scan"/>
+  </node>
+
+  <!--  ***************** Robot Model *****************  -->
+  <include file="$(find turtlebot3_bringup)/launch/turtlebot3_remote.launch">
+    <arg name="model" value="$(arg model)" />
+  </include>
+
+  <!-- Map server -->
+  <node pkg="map_server" name="map_server" type="map_server" args="$(arg map_file)"/>
+
+  <!-- AMCL -->
+  <include file="$(find turtlebot3_navigation)/launch/amcl.launch" >
+    <arg name="initial_pose_x" default="$(arg initial_pose_x)"/>
+    <arg name="initial_pose_y" default="$(arg initial_pose_y)"/>
+    <arg name="initial_pose_a" default="$(arg initial_pose_a)"/>
+  </include>
+
+  <!-- move_base -->
+  <include file="$(find turtlebot3_navigation)/launch/move_base.launch">
+    <arg name="model" value="$(arg model)" />
+    <arg name="move_forward_only" value="$(arg move_forward_only)"/>
+  </include>
+
+    <!-- rviz -->
+  <group if="$(arg open_rviz)"> 
+    <node pkg="rviz" type="rviz" name="rviz" required="true"
+          args="-d $(find turtlebot3_navigation)/rviz/turtlebot3_navigation.rviz"/>
+  </group>
+</launch>
