@@ -11,6 +11,7 @@ from scipy.spatial import distance
 import copy
 import pickle
 from getpass import getuser
+from os import getcwd
 
 ## Global Variables
 # mobile_base velocity publisher
@@ -31,9 +32,10 @@ map_name = ""
 map = []
 start_point = Pose2D(7,7,0)
 goal_point =  Pose2D(1,1,0)
-# a proxy for the map identifying which cells have already been visited
-visited = []
-visited_reset = []
+
+# a proxy for the map identifying which cells have already been visited.
+# will be used to fill the map with 0s at the start of each episode.
+visited_reset = None
 
 # the generated set of points for the robot to follow
 path = []
@@ -124,6 +126,10 @@ def train_ql(map_name, map, start_point, goal_point, train):
             eps  = 0
 
         while episode < episode_num:
+            # print progress to the console
+            if episode % 100 == 0:
+                print("Starting episode " + str(episode) + " of run " + str(count))
+            # reset our episode-dependent variables
             timeout = 0
             path = []
             visited = visited_reset
@@ -157,13 +163,14 @@ def train_ql(map_name, map, start_point, goal_point, train):
         print(path)
         count += 1
     pickle.dump(q, open(map_name + ".ql","wb"))
+    print("Working Directory is ", getcwd())
     return path
 
 # def sarsa(map,start_point,goal_point):
 #     return 0
 
 def max_q(q, s_prime):
-    print("finding max q for ", s_prime.x, s_prime.y)
+    #print("finding max q for ", s_prime.x, s_prime.y)
     # after we take action A and arrive at state S', 
     #   we will find the highest Q value for S' with any available action A'.
     max_q = 0
@@ -193,7 +200,7 @@ def execute(action, state, map, visited):
             r = -1
             if visited[state.x + 1][state.y] == True:
                 # this cell has already been visited
-                r = -5
+                r = -20
             s_prime = Pose2D(state.x + 1,state.y,0)
         else:
             # this move is not allowed (would move into a wall or out of bounds)
@@ -205,7 +212,7 @@ def execute(action, state, map, visited):
             r = -1
             if visited[state.x][state.y + 1] == True:
                 # this cell has already been visited
-                r = -5
+                r = -20
             s_prime = Pose2D(state.x,state.y+1,0)
         else:
             # this move is not allowed (would move into a wall or out of bounds)
@@ -217,7 +224,7 @@ def execute(action, state, map, visited):
             r = -1
             if visited[state.x - 1][state.y] == True:
                 # this cell has already been visited
-                r = -5
+                r = -20
             s_prime = Pose2D(state.x -1,state.y,0)
         else:
             # this move is not allowed (would move into a wall or out of bounds)
@@ -229,7 +236,7 @@ def execute(action, state, map, visited):
             r = -1
             if visited[state.x][state.y - 1] == True:
                 # this cell has already been visited
-                r = -5
+                r = -20
             s_prime = Pose2D(state.x,state.y-1,0)
         else:
             # this move is not allowed (would move into a wall or out of bounds)
