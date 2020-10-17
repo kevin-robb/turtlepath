@@ -1,5 +1,8 @@
 <launch>
   <!-- Heres the link to set it up for when you're confused in the future-->
-  <!-- https://github.com/ms-iot/vscode-ros/blob/master/doc/debug-support.md#launch-->
-  <node pkg="ml_long_project" type="potential_field.py" name="pf_agent" output="screen"/>
+  <!-- https://github.com/ms-iot/vscode-ros/blob/master/doc/debug-support.md#launch--> 
+  <node pkg="ml_long_project" type="sarsa.py" name="sarsa" output="screen">
+    <param name="~train" value="false" />
+    <param name="map_name" value="map1" />
+  </node>
 </launch>

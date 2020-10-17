@@ -12,6 +12,7 @@ from scipy.spatial import distance
 import copy
 import pickle
 from getpass import getuser
+from nav_msgs.msg import Odometry
 
 ## Global Variables
 # mobile_base velocity publisher
@@ -28,9 +29,10 @@ cur_state = "init"
 train = None
 map_name = ""
 
-map=[]
-start_point = Pose2D(7,7,0)
-goal_point =  Pose2D(1,1,0)
+vel = Twist()
+current_position = Pose2D(0,0,0)
+
+goal_point =  Pose2D(6,6,0) # Weird coord transform error
 path = []
 cmds = []
 
@@ -48,15 +50,16 @@ def get_scan_ranges(scan_msg):
 
 def check_state():
     global cur_state
-    global map, train, map_name
-    global start_point,goal_point, path, cmds
+    global train, map_name
+    global goal_point, path, cmds
     if cur_state == "init":
-        if(len(map) > 0):
-            cur_state = "plan"
+        cur_state = "plan"
 
     elif cur_state == "plan":
         print("Train? " + str(train))
-        path = train_sarsa(map_name, map,start_point,goal_point,train)
+        #path = train_sarsa_accel(map_name, map,start_point,goal_point,train)
+        path = train_sarsa_real_life(map_name,goal_point,train)
+
         if(len(path) > 0):
             cur_state = "execute"
             path_to_cmd()
@@ -90,29 +93,29 @@ def path_to_cmd():
             cmds.append("west")
         elif next == 2:
             cmds.append("south")
+
   
     print("path_to_cmd finished.")
     print(cmds)
 
+def retrieve_q(map_name):
+    # Save out data to map_name.sarsa so we don't have to retrain on familiar maps
+    #pickle.dump(map, open("sarsa_data/"+map_name + ".sarsa","wb"))
+    try:
+        q, count = pickle.load( open(map_name + ".sarsa", "rb" ) ) 
+    except (OSError, IOError) as e:
+        # There are states(x,y) and 4 Actions (up, down, right, left)
+        q = {}
+        count = 0
+    return q, count
 
-def train_sarsa(map_name, map,start_point, goal_point, train):
+def write_q(map_name, q, count):
+    pickle.dump((q,count), open(map_name + ".sarsa","wb"))
+
+def train_sarsa_accel(map_name, map,start_point, goal_point, train):
     alpha = .5
     gamma = .9
     eps  = .2
-
-    # Save out data to map_name.sarsa so we don't have to retrain on familiar maps
-    #pickle.dump(map, open("sarsa_data/"+map_name + ".sarsa","wb"))
-    # Load prior Q or init to zero
-    try:
-        q = pickle.load( open(map_name + ".sarsa", "rb" ) ) 
-    except (OSError, IOError) as e:
-        # There are states(x,y) and 4 Actions (up, down, right, left)
-        q = np.ones((map.shape[1], map.shape[0], 4))
-        q[goal_point.x, goal_point.y, 0] = 0
-        q[goal_point.x, goal_point.y, 1] = 0
-        q[goal_point.x, goal_point.y, 2] = 0
-        q[goal_point.x, goal_point.y, 3] = 0
-
     # Episode
     count = 0
     # Want to see the path every certain number of episodes
@@ -139,7 +142,7 @@ def train_sarsa(map_name, map,start_point, goal_point, train):
             # 3 is West
             # s is state and equals a point in the map
             s = start_point
-            # Choose A from S using policy derived from Q (e.g. e-greedy)
+            # Choose A from S using policy dervied from Q (e.g. e-greedy)
             a = e_greedy(eps, q, s)
             path.append(a)
             # Loop through episode
@@ -156,22 +159,100 @@ def train_sarsa(map_name, map,start_point, goal_point, train):
                 s = s_prime
                 a = a_prime
                 path.append(a)
-            episode += 1
+            episode +=1
 
         print(path)
-        count += 1
-    pickle.dump(q, open(map_name + ".sarsa","wb"))
+        count +=1
     return path
 
-def sarsa(map,start_point,goal_point):
-    return 0
+def train_sarsa_real_life(map_name, goal_point, train):
+    global current_position
+    alpha = .5
+    gamma = .9
+    eps  = .2
+
+    q, count = retrieve_q(map_name)
+
+    if(count < 3):
+        eps = 1 # totally random walk to build a better model
+    
+    timeout = 0
+    path = []
+    # a is action
+    # 0 is North
+    # 1 is East
+    # 2 is South
+    # 3 is West
+    # s is state and equals a point in the map
+    s = to_str(current_position)
+    # Choose A from S using policy dervied from Q (e.g. e-greedy)
+    a = e_greedy(eps, q, s)
+    path.append(a)
+    # Loop through episode
+    crashed = False
+    while timeout < 50 and s != to_str(goal_point) and not crashed:
+        # Take action A, observe R,S'
+        r, s_prime, crashed = execute_rl(a,s)
+        # Choose A' from S' using policy dervied from Q (e.g. e-greedy)
+        a_prime = e_greedy(eps, q, s_prime)
+
+        if not (s in q): # If Q is not initalized for our action set it to 0
+            d={}
+            d[a] = 0
+            q[s] = d
+        elif not a in q[s]:
+            q[s][a] = 0
+        if not (s_prime in q):
+            d={}
+            d[a_prime] = 0
+            q[s_prime] = d
+        elif not a_prime in q[s_prime]:
+            q[s_prime][a_prime] = 0
+    
+        
+        # Q(S,A) <- Q(S,A) + alpha[R+gamma * Q(S',A')- Q(S,A)]
+        q[s][a] = q[s][a] + alpha * (r+gamma*q[s_prime][a_prime] - q[s][a])
+
+        # S<- S'; A<-A';
+        s = s_prime
+        a = a_prime
+        path.append(a)
+
+    print(path)
+    write_q(map_name,q, count)
+    return path
+
+def to_str(s):
+    return("X: "+ str(s.x) + " "+"Y: "+ str(s.y))
+
+def decode_action(a):
+    # a is action
+    # 0 is North
+    # 1 is East
+    # 2 is South
+    # 3 is West
+
+    if a == 0:
+        action = "north"
+    elif a == 1: 
+        action = "east"
+    elif a == 2:
+        action = "south"
+    else:
+        action = "west"
+    return action
 
 def e_greedy(eps, q, s):
-    p = np.random.random() 
-    if p < eps: 
-      a = np.random.randint(0,4) 
-    else: 
-      a = np.argmax([action for action in q[s.x,s.y]]) 
+    # If we have been in this state try to epsilon greedy it
+    if s in q:
+        p = np.random.random() 
+        if p < eps: 
+            a = np.random.randint(0,4) 
+        else: 
+            a = np.argmax([action for action in q.get(s)]) 
+    # If we've never been here we don't know where to go, so it's random
+    else:
+        a = np.random.randint(0,4) 
     return a
 
 def execute(action, state, map):
@@ -209,41 +290,39 @@ def execute(action, state, map):
 
     return r, s_prime
 
-def get_map(map_msg):
-    global map
-    #print(map_msg.info)
-    # Take in the full map and put it into numpy
-    big_map = (np.asarray(map_msg.data))
-    big_map = np.reshape(big_map, (map_msg.info.height,map_msg.info.width))
-    
-    print(map_msg.info.origin)
-
-    # Create a downsampled map
-    resolution = map_msg.info.resolution
-    small_map = np.zeros((int(map_msg.info.width*resolution)+1,int(map_msg.info.width*resolution)+1))
-    
-    # Save it out to view at as a csv
-    #np.savetxt("/home/lelliott/turtlepath/rl-ws/demofile2.csv", big_map, delimiter=",")
-
-    for x in range(small_map.shape[0]):
-        for y in range(small_map.shape[1]):
-            big_x = int(x/resolution)
-            big_y = int(y/resolution+1)
-            # Weird Conversion error?
-            if(big_y >= big_map.shape[1]):   
-                big_y = big_map.shape[1]-1
-            if(big_y == 1):
-                big_y=0
-            # Add a 1 in small map if not 0
-            small_map[y,x] = int( big_map[big_y,big_x] != 0)
-        
-    # Small map is a downsampled map at the 1m x 1m "vertexs" of big map
-    small_map = np.fliplr(np.flipud(small_map.transpose()))
-    print(small_map)
-    map = small_map
-    np.savetxt("/home/"+getuser()+"/turtlepath/rl-ws/map.csv", map, delimiter=",")
+def execute_rl(a,s):
+    global vel
+    global current_position
+    send_command(decode_action(a))
+    rospy.sleep(2) # Sleep for half a second
+    count = 0
+    crashed = False
+    prev = current_position
+    while count < 5 and not crashed:
+      if(((abs(vel.linear.x) < .05) and abs(vel.angular.z) < .05)):
+          count +=1
+      else:
+          count = 0
+      crashed = abs(vel.linear.x) > .5 and current_position == prev
+      rospy.sleep(.01)  
+    # return it's new location
+    reward = -1
+    cp = to_str(current_position)
+    if(s == cp):
+        reward = -5
+    if(crashed):
+        reward = -10
+    print("Start: "+s+ " Finish: " + cp)
+    print(reward)
+    return reward, cp, crashed
 
 
+def check_odom(odom_msg):
+    global vel
+    global current_position
+    current_position.x = round(odom_msg.pose.pose.position.x)
+    current_position.y = round(odom_msg.pose.pose.position.y) # round to nearest int
+    vel = odom_msg.twist.twist
 def send_command(keyword):
     cmd_msg.data = keyword
     command_pub.publish(cmd_msg)
@@ -251,6 +330,10 @@ def send_command(keyword):
 def update_state(timer_event):
     # at each timer step, update the state and send an action
     check_state()
+
+    # tell us the current state for debug
+    #print(cur_state)
+    #print([fwd_scan, l_scan, rear_scan, r_scan])
 
 def main():
     global command_pub, train, map_name
@@ -267,8 +350,8 @@ def main():
     # subscribe to the grouped scan values
     # format is [fwd_scan, rear_scan, l45_scan, l_scan, r45_scan, r_scan]
     rospy.Subscriber('/tp/scan', Int32MultiArray, get_scan_ranges, queue_size=1)
-    rospy.Subscriber('/map', OccupancyGrid, get_map, queue_size=1)
     rospy.Subscriber('/tp/request', Bool, send_next_cmd, queue_size=1)
+    rospy.Subscriber('/odom', Odometry, check_odom, queue_size=1)
 
     # Set up a timer to update robot's drive state at 1 Hz
     rospy.Timer(rospy.Duration(secs=.25), update_state)
