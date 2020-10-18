@@ -100,7 +100,7 @@ def train_ql(map_name, map, start_point, goal_point, train):
     #pickle.dump(map, open("ql_data/"+map_name + ".ql","wb"))
     # Load prior Q or init to zero
     try:
-        q = pickle.load( open(map_name + ".ql", "rb" ) ) 
+        q = pickle.load( open("/home/"+getuser()+"/turtlepath/rl-ws/" + map_name + ".ql", "rb" ) ) 
     except (OSError, IOError) as e:
         # There are states(x,y) and 4 Actions (up, down, right, left)
         q = np.ones((map.shape[1], map.shape[0], 4))
@@ -113,8 +113,8 @@ def train_ql(map_name, map, start_point, goal_point, train):
     count = 0
     # Want to see the path every certain number of episodes
     if(train):
-        count_num = 10
-        episode_num = 5000
+        count_num = 5 #was 10
+        episode_num = 1000 #was 5000
     else:
         count_num = 1
         episode_num = 1
@@ -127,7 +127,7 @@ def train_ql(map_name, map, start_point, goal_point, train):
 
         while episode < episode_num:
             # print progress to the console
-            if episode % 100 == 0:
+            if episode % 250 == 0:
                 print("Starting episode " + str(episode) + " of run " + str(count))
             # reset our episode-dependent variables
             timeout = 0
@@ -162,8 +162,8 @@ def train_ql(map_name, map, start_point, goal_point, train):
 
         print(path)
         count += 1
-    pickle.dump(q, open(map_name + ".ql","wb"))
-    print("Working Directory is ", getcwd())
+    pickle.dump(q, open("/home/"+getuser()+"/turtlepath/rl-ws/" + map_name + ".ql","wb"))
+    #print("Working Directory is ", getcwd())
     return path
 
 # def sarsa(map,start_point,goal_point):
@@ -200,49 +200,51 @@ def execute(action, state, map, visited):
             r = -1
             if visited[state.x + 1][state.y] == True:
                 # this cell has already been visited
-                r = -20
+                r = -3
             s_prime = Pose2D(state.x + 1,state.y,0)
         else:
             # this move is not allowed (would move into a wall or out of bounds)
             s_prime = state 
-            r = -5
+            r = -10
     elif(action == 2): # South
         if((state.y + 1) < map.shape[0] and map[state.y+1, state.x] != 1):
             # this move is allowed
             r = -1
             if visited[state.x][state.y + 1] == True:
                 # this cell has already been visited
-                r = -20
+                r = -3
             s_prime = Pose2D(state.x,state.y+1,0)
         else:
             # this move is not allowed (would move into a wall or out of bounds)
             s_prime = state 
-            r = -5
+            r = -10
     elif(action == 3): # West
         if((state.x - 1) > 0 and map[state.y, state.x-1] != 1):
             # this move is allowed
             r = -1
             if visited[state.x - 1][state.y] == True:
                 # this cell has already been visited
-                r = -20
+                r = -3
             s_prime = Pose2D(state.x -1,state.y,0)
         else:
             # this move is not allowed (would move into a wall or out of bounds)
             s_prime = state 
-            r = -5    
+            r = -10
     else: # North
         if((state.y - 1) > 0 and map[state.y-1, state.x] != 1):
             # this move is allowed
             r = -1
             if visited[state.x][state.y - 1] == True:
                 # this cell has already been visited
-                r = -20
+                r = -3
             s_prime = Pose2D(state.x,state.y-1,0)
         else:
             # this move is not allowed (would move into a wall or out of bounds)
             s_prime = state 
-            r = -5
-
+            r = -10
+    # check if we have arrived at the goal (BEEG reward to make it all worth it)
+    if s_prime == goal_point:
+        r = 200
     return r, s_prime
 
 def get_map(map_msg):
@@ -258,7 +260,7 @@ def get_map(map_msg):
     resolution = map_msg.info.resolution
     small_map = np.zeros((int(map_msg.info.width*resolution)+1,int(map_msg.info.width*resolution)+1))
     
-    # Save it out to view at as a csv
+    # Save it out to view it as a csv
     #np.savetxt("/home/"+getuser()+"/turtlepath/rl-ws/demofile2.csv", big_map, delimiter=",")
 
     for x in range(small_map.shape[0]):
