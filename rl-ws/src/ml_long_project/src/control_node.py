@@ -10,6 +10,7 @@ from nav_msgs.msg import Odometry
 from scipy.spatial.transform import Rotation as R
 from copy import deepcopy
 import math
+from std_srvs.srv import Empty
 
 ## Global Variables
 # mobile_base velocity publisher
@@ -33,6 +34,8 @@ stalled = False
 # Where we are and where we want to go
 current_position = Pose2D(0,0,0)
 goal_position = Pose2D(0,0,0)
+start_position = Pose2D(0,0,0)
+
 integral_prior_angle = 0
 integral_prior_forward = 0
 error_prior_forward = 0
@@ -98,6 +101,7 @@ def scan_discrete(scan_val):
 
 def add_cmd(str_msg):
     global command_list
+
     # commands will be either "north", "south", "east", or "west".
     # we need to handle turning here by creating two commands for each one.
     
@@ -129,6 +133,10 @@ def add_cmd(str_msg):
         or str_msg.data == "west" and goal_position.theta == 0:
         # we need to turn left
         command_list.append("turn_left")
+    elif str_msg.data == "reset":
+        print("Reset!!!!")
+        reset_stage()
+        return
     else:
         print("Invalid Command:" + str_msg.data)
         return
@@ -136,6 +144,15 @@ def add_cmd(str_msg):
     # the robot has now been told to turn the correct way. Next, move.
     command_list.append("forward")
 
+def reset_stage():
+    global goal_position, current_position, current_cmd, start_position
+    global command_list
+    print("Resetting Stage")
+    reset_positions = rospy.ServiceProxy('reset_positions', Empty)
+    command_list = []
+    reset_positions()
+    goal_position =  deepcopy(start_position)
+    current_cmd = ""
 
 def is_cmd_valid(str_cmd):
     # check to ensure a given command (string) will not cause 
@@ -191,6 +208,7 @@ def set_goal(forward, theta):
 
 def execute_goal(event):
     global initvar, current_position, goal_position, integral_prior_forward,integral_prior_angle, error_prior_forward, error_prior_angle, iteration_time, command_list,current_cmd
+    global start_position
     # check how far off the robot is from the goal position and heading
     delta_theta = goal_position.theta - current_position.theta
 
@@ -198,7 +216,7 @@ def execute_goal(event):
     if(initvar):
         initvar = False
         goal_position = deepcopy(current_position)
-
+        start_position = deepcopy(current_position)
     # if the robot is within 0.1 units of the goal in both x and y 
     #   and within 5 degrees, get the next command.
 
@@ -233,24 +251,33 @@ def execute_goal(event):
     error_prior_forward = forward
     error_prior_angle = delta_theta
 
+    finish_msg = Bool()
+    finish_msg.data = False
+
     # if we are moving forward, check that we have basically arrived at the desired location.
     # if we are turning, check that we have basically gotten onto the desired heading.
     if((current_cmd == "forward" and abs(fw_pid) < .1) or (current_cmd != "forward" and abs(an_pid) < .1)):
             # check if we should request another command
             if len(command_list) < 2:
                 request_cmd()
+              #  if current_cmd == "forward":
+              #      print("switching")
+              #      finish_msg.data = True
             # check if there are any commands in the queue.
             if(len(command_list) > 0 ):
                 # pop the next command off the queue and if it's valid, set it to run next.
                 #print(command_list)
                 next_cmd = command_list.pop(0)
+                print(current_cmd)
                 current_cmd = next_cmd
+
                 if is_cmd_valid(next_cmd):
                     set_cmd(next_cmd)
                     integral_prior_forward = 0
                     integral_prior_angle = 0
                     error_prior_forward = 0
                     error_prior_angle = 0
+    finish_pub.publish(finish_msg)
 
 def send_cmd(fwd_spd, turn_spd):
     # x-direction is forward.
@@ -269,7 +296,7 @@ def request_cmd():
     req_pub.publish(req_msg)
 
 def main():
-    global command_pub, scan_pub, req_pub, iteration_time
+    global command_pub, scan_pub, req_pub, iteration_time, finish_pub
 
     # initialize node.
     rospy.init_node('control_node')
@@ -281,6 +308,7 @@ def main():
     scan_pub = rospy.Publisher("/tp/scan", Int32MultiArray, queue_size=1)
     # publish to a custom topic '/tp/request' to let the agent know we are ready for another command.
     req_pub = rospy.Publisher('/tp/request', Bool, queue_size=1)
+    finish_pub = rospy.Publisher('/tp/finish', Bool, queue_size=1)
 
     # subscribe to the lidar scan values.
     rospy.Subscriber('/scan', LaserScan, check_scan, queue_size=1)
