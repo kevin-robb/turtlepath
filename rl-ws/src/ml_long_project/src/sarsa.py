@@ -309,7 +309,7 @@ def execute_sim(action, state, q):
     # IMPORTANT: Execute does not factor in heading. It is only based on finding a coordinate path similar to A* and Potential Fields
     # Ie North goes down a y val, East increments x etc
     # Reward is always -1. Unless it tries to go into a wall, it doesn't move and gets a -5
-    if (not (state in map)) or (not (a in map[s])):
+    if (not (state in map)) or (not (action in map[state])):
         # we haven't ever seen the requested action in s
         # thus it's too risky to actually take
         # but we don't want to give it a
@@ -317,8 +317,8 @@ def execute_sim(action, state, q):
         r = -1
         s_prime = state
     else:
-        s_prime,r = map[state][action]
-
+        s_prime = map[state][action]['state']
+        r = map[state][action]['reward']
     return r, s_prime
 
 def execute_rl(a,s):
@@ -351,17 +351,17 @@ def execute_rl(a,s):
     if(s == s_prime):
         reward = -5
     if(crashed):
-        reward = -10
+        reward = -1000
     #print("Start: "+s+ " Finish: " + s_prime)
     #print(reward)
     if not (s in map): # If Q is not initalized for our action set it to 0
             d={}
-            d[a] = {s_prime,reward}
+            d[a] = {"state":s_prime,"reward":reward}
             map[s] = d
     elif not (a in map[s]):
-        map[s][a] = {s_prime,reward}
+        map[s][a] = {"state":s_prime,"reward":reward}
     else:
-        map[s][a] = {s_prime,reward}
+        map[s][a] = {"state":s_prime,"reward":reward}
     return reward, s_prime, crashed
 
 
