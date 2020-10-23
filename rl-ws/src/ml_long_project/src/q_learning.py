@@ -11,7 +11,8 @@ from scipy.spatial import distance
 import copy
 import pickle
 from getpass import getuser
-from os import getcwd
+#from os import getcwd
+from datetime import datetime
 
 ## Global Variables
 # mobile_base velocity publisher
@@ -92,6 +93,9 @@ def path_to_cmd():
 
 
 def train_ql(map_name, map, start_point, goal_point, train):
+    # set date which is used in data output filenames
+    dt = datetime.now()
+    # define learning parameters
     alpha = 0.05
     gamma = 0.9
     eps  = 0.2
@@ -120,6 +124,11 @@ def train_ql(map_name, map, start_point, goal_point, train):
         episode_num = 1
 
     while count < count_num:
+        # Define the structure that will store training data until it is output to a csv.
+        # (pre-define rather than appending each episode for time efficiency.)
+        # Stored data will be [episode #, # of moves to goal] on each line.
+        training_data = [[i,0] for i in range(episode_num)]
+
         episode = 0
         if(count == count_num-1):
             print("Turning off epsilon for max greedy")
@@ -130,7 +139,7 @@ def train_ql(map_name, map, start_point, goal_point, train):
             if episode % 250 == 0:
                 print("Starting episode " + str(episode) + " of run " + str(count))
             # reset our episode-dependent variables
-            timeout = 0
+            num_moves = 0
             path = []
             visited = visited_reset
             # a is an action: can be 0 (North), 1 (East), 2 (South), or 3 (West)
@@ -140,7 +149,7 @@ def train_ql(map_name, map, start_point, goal_point, train):
             a = e_greedy(eps, q, s)
             path.append(a)
             # Loop through episode
-            while timeout < 5000 and s != goal_point:
+            while num_moves < 5000 and s != goal_point:
                 # mark the current state as visited
                 visited[s.x][s.y] = True
 
@@ -156,12 +165,19 @@ def train_ql(map_name, map, start_point, goal_point, train):
                 s = s_prime
                 a = a_prime
                 path.append(a)
-                # increment timeout and stop the episode if it goes 5000 cycles without reaching the goal
-                timeout += 1
+                # increment num_moves and stop the episode if it goes 5000 cycles without reaching the goal
+                num_moves += 1
+            training_data[episode][1] = num_moves
             episode += 1
-
+        
+        # save data each count from training to use for plots and analysis
+        filepath = "/home/"+getuser()+"/turtlepath/rl-ws/data/"
+        filename = "ql_" + map_name + "_" + dt.strftime("%Y-%m-%d-%H-%M-%S") + "_c" + str(count)
+        np.savetxt(filepath + filename + ".csv", training_data, delimiter=",")
+    
         print(path)
         count += 1
+    # save the brain to use later without training
     pickle.dump(q, open("/home/"+getuser()+"/turtlepath/rl-ws/" + map_name + ".ql","wb"))
     #print("Working Directory is ", getcwd())
     return path

@@ -10,7 +10,7 @@
 <launch>
   <!-- Launch our nodes that control the robot. -->
   <node pkg="ml_long_project" type="q_learning.py" name="q_learning" output="screen">
-    <param name="~train" value="false" />
+    <param name="~train" value="true" />
     <param name="map_name" value="map1" />
   </node>
   <node pkg="ml_long_project" type="control_node.py" name="control_node" output="screen"/>
