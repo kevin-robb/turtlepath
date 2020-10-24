@@ -1,0 +1,145 @@
+---
+title: "rl_data_analysis"
+author: "Kevin Robb"
+date: "10/23/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Code to read in a single file and plot it manually
+
+```{r}
+# first read in and setup the data
+# set the filename for each file to plot
+filename = "ql_map1_2020-10-23-10-51-19_c2"
+filedir = "data/"
+filepath <- paste(filedir, filename, ".csv", sep="")
+print(filepath)
+df <- read.csv(file=filepath)
+names(df) <- c("episode", "steps")
+
+# plot the data
+with(df, plot(episode, steps, type="l"))
+```
+
+# Plot each count's average number of moves
+
+## Read in data
+
+```{r}
+# set the filename. depends on the time it was run
+filename = "ql_map1_2020-10-23-10-51-19"
+filedir = "data/"
+
+# create list that will contain key values from each file
+df_stats <- data.frame("count" = 1:5, "avg" = c(1:5), "min" = c(1:5), "max" = c(1:5))
+
+# loop through all files and store key values
+counts = c(1:5)
+for (count in counts) {
+  filepath <- paste(filedir, filename, "_c", count-1, ".csv", sep="")
+  print(filepath)
+  df <- read.csv(file=filepath)
+  names(df) <- c("episode", "steps")
+  #print(head(df))
+  #avg[[count]] = mean(df$steps)
+  df_stats$avg[count] = mean(df$steps)
+  #mins[[count]] = min(df$steps)
+  df_stats$min[count] = min(df$steps)
+  #maxes[[count]] = max(df$steps)
+  df_stats$max[count] = max(df$steps)
+}
+```
+
+## Plot the averages with min and max bars
+
+```{r}
+# plot the key values
+
+plot(counts, df_stats$avg,
+    ylim=range(c(min(df_stats$min), max(df_stats$max))),
+    pch=19, xlab="Count (Set of Episodes)", ylab="Steps Taken to Reach Goal", main="Avg and Range for Each Count"
+)
+# hack: we draw arrows but with very special "arrowheads"
+arrows(df_stats$count, df_stats$min, df_stats$count, df_stats$max, length=0.05, angle=90, code=3)
+
+```
+
+## Save the plot to a png
+
+```{r}
+# open the file
+filepath = paste("plots/", filename, ".png", sep="")
+png(file=filepath, width=600, height=350)
+# plot the data
+
+plot(counts, df_stats$avg,
+    ylim=range(c(min(df_stats$min), max(df_stats$max))),
+    pch=19, xlab="Count (Set of Episodes)", ylab="Steps Taken to Reach Goal", main="Avg and Range for Each Count"
+)
+# hack: we draw arrows but with very special "arrowheads"
+arrows(df_stats$count, df_stats$min, df_stats$count, df_stats$max, length=0.05, angle=90, code=3)
+
+# close the file
+dev.off()
+```
+
+# Try to do some fancy stuff (DOES NOT WORK)
+
+## Read in Data
+
+```{r}
+# set the filename. depends on the time it was run
+filename = "ql_map1_2020-10-23-10-51-19_c"
+filedir = "data/"
+
+# create list that will contain dataframes for each file
+my_data <- list()
+
+counts = c(1,2,3,4,5)
+for (count in counts) {
+  filepath <- paste(filedir, filename, count-1, ".csv", sep="")
+  print(filepath)
+  df <- read.csv(file=filepath)
+  names(df) <- c("episode", "steps")
+  #print(head(df))
+  my_data[[count]] = df #[2]
+  #print(head(my_data[count]))
+  #names(my_data[count]) <- "steps"
+  names(my_data[count]) <- paste("df", count, sep="")
+  #my_data[count] <- read.csv(file=filepath)
+}
+
+# name the list elements to match the files
+#names(my_data) <- gsub("\\.csv$", "", my_files)
+```
+
+## Plot Each Set and Save as PNG
+
+```{r}
+for (i in seq_along(my_data)) {
+  # open the file
+  filepath = paste("plots/c", i-1, ".png", sep="")
+  png(file=filepath, width=600, height=350)
+  # plot the data
+  this_df = paste("df", count, sep="")
+  x <- c(1:length(my_data[[i]]))
+  #x <- c(1:length(my_data$this_df))
+  #x <- my_data$this_df$episode
+  print(head(x))
+  y <- my_data[[i]] #$steps
+  #y <- my_data$this_df$steps
+  #print(head(y))
+  #with(my_data[i], plot(x,y))
+  title = paste("QL c", i-1, sep="")
+  #plot(x, y, type="l", main=title)
+  #points(x, y)
+  # close the file
+  dev.off()
+}
+```
+
+
