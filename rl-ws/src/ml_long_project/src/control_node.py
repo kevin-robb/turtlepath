@@ -165,7 +165,7 @@ def is_cmd_valid(str_cmd):
     #   the robot to move to an occupied vertex.
     if str_cmd == "forward":
         print("Trying to Move Forward", fwd_scan)
-        return fwd_scan > 1.75 and off_right > 1 and off_left > 1
+        return fwd_scan > 1.75 and off_right > 1.5 and off_left > 1.5
     elif str_cmd == "turn_left" or str_cmd == "turn_right" or str_cmd == "turn_180":
         print("Turning in place")
         return True
@@ -262,7 +262,7 @@ def execute_goal(event):
 
     # if we are moving forward, check that we have basically arrived at the desired location.
     # if we are turning, check that we have basically gotten onto the desired heading.
-    if((current_cmd == "forward" and abs(fw_pid) < .1) or (current_cmd != "forward" and abs(an_pid) < .1)):
+    if((current_cmd == "forward" and abs(fw_pid) < .05) or (current_cmd != "forward" and abs(an_pid) < .05)):
             # check if we should request another command
             if len(command_list) < 2:
                 request_cmd()

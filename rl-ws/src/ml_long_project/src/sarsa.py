@@ -96,7 +96,7 @@ def check_state():
 
 def master_train(map_name,goal_point,train):
     global map
-    #delete_q(map_name)
+    delete_q(map_name)
     
     count = 0
     accelerate = True
@@ -373,7 +373,7 @@ def execute_rl(a,s):
     crashed = False
     crashed_count = 0
     timeout =0
-    while count < 5 and crashed_count < 50 and timeout < 600:
+    while count < 5 and crashed_count < 50 and timeout < 300:
         if (abs(vel.linear.x) < .1 and abs(vel.angular.z) < .5):
             count +=1
         else:
