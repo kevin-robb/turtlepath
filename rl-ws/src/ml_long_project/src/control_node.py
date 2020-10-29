@@ -24,6 +24,8 @@ fwd_scan = None
 rear_scan = None
 l_scan = None
 r_scan = None
+off_left = None
+off_right = None
 # Twist command that will be sent to the robot
 cmd = Twist()
 
@@ -50,7 +52,7 @@ iteration_time = .1
 command_list = []
 
 def check_scan(scan_msg):
-    global fwd_scan, rear_scan, r_scan, l_scan
+    global fwd_scan, rear_scan, r_scan, l_scan,off_right,off_left
     # scan_msg.ranges is an array of 640 elements representing 
     # distance measurements in a full circle around the robot (0=fwd, CCW?)
 
@@ -61,6 +63,9 @@ def check_scan(scan_msg):
     l_scan = scan_discrete(scan_msg.ranges[160]) # 90 degrees left
     r45_scan = scan_discrete(scan_msg.ranges[560]) # ~45 degrees right
     r_scan = scan_discrete(scan_msg.ranges[480]) # 90 degrees right
+
+    off_left = scan_discrete(scan_msg.ranges[40])
+    off_right = scan_discrete(scan_msg.ranges[600])
 
     # group and publish the relevant scan ranges
     scan_group = Int32MultiArray()
@@ -155,11 +160,12 @@ def reset_stage():
     current_cmd = ""
 
 def is_cmd_valid(str_cmd):
+    global fwd_scan, rear_scan, r_scan, l_scan,off_right,off_left
     # check to ensure a given command (string) will not cause 
     #   the robot to move to an occupied vertex.
     if str_cmd == "forward":
         print("Trying to Move Forward", fwd_scan)
-        return fwd_scan > 1
+        return fwd_scan > 1.75 and off_right > 1 and off_left > 1
     elif str_cmd == "turn_left" or str_cmd == "turn_right" or str_cmd == "turn_180":
         print("Turning in place")
         return True

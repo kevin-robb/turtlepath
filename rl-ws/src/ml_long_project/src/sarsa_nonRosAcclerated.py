@@ -36,37 +36,19 @@ train = None
 map_name = ""
 
 vel = Twist()
-current_position = Pose2D(0,0,0)
+current_position = Pose2D(-2,-2,0)
 
 goal_point =  Pose2D(4,4,0) # Weird coord transform error
 path = []
-cmds = []
+global_map =np.genfromtxt("/home/lelliott/turtlepath/rl-ws/map.csv", delimiter=',')
 map = {}
 
 finished = False
 
 
 def reset_stage():
-    send_command('reset')
-    rospy.sleep(1)
-    send_command('reset')
-    rospy.sleep(1)
-    send_command('reset')
-    rospy.sleep(1)
-    send_command('reset')
-
-def get_scan_ranges(scan_msg):
-    global fwd_scan, rear_scan, l45_scan, l_scan, r45_scan, r_scan
-    # format is [fwd_scan, rear_scan, l45_scan, l_scan, r45_scan, r_scan]
-
-
-    # update the important entries
-    fwd_scan = scan_msg.data[0] # directly forward
-    rear_scan = scan_msg.data[1] # directly behind
-    l45_scan = scan_msg.data[2] # ~45 degrees left
-    l_scan = scan_msg.data[3] # 90 degrees left
-    r45_scan = scan_msg.data[4] # ~45 degrees right
-    r_scan = scan_msg.data[5] # 90 degrees right
+    global current_position
+    current_position = Pose2D(-2,-2,0)
 
 def delete_q(map_name):
     if os.path.exists(map_name + ".sarsa"):
@@ -74,35 +56,14 @@ def delete_q(map_name):
     else:
         print("The file does not exist") 
 
-def check_state():
-    global cur_state
-    global train, map_name
-    global goal_point, path, cmds
-    if cur_state == "init":
-        cur_state = "plan"
-
-    elif cur_state == "plan":
-        #print("Train? " + str(train))
-        #path = train_sarsa_accel(map_name, map,start_point,goal_point,train)
-        path = master_train(map_name,goal_point,train)
-       
-        if(len(path) > 0):
-            cur_state = "execute"
-            path_to_cmd()
-    elif(cur_state == 'execute'):
-        #print ("Executing learned path")
-        #print(path)
-        #print(cmds)
-        cur_state = 'done'
-
 def master_train(map_name,goal_point,train):
     global map
-    #delete_q(map_name)
+    delete_q(map_name)
     # train several times in real life to build a map
     count = 0
     accelerate = True
     episode_num = 1
-    #dt = datetime.now()
+    dt = datetime.now()
     training_data = [[i,0, True] for i in range(episode_num)]
     satisfied = False
     s_count = 0
@@ -128,7 +89,7 @@ def master_train(map_name,goal_point,train):
                     print(path)
                     print(len(path))
             count += 1
-        if(len(path) > 16 or crashed):
+        if(len(path) > 16):
             satisfied = False
         else:
             print("Took: " + str(s_count*episode_num))
@@ -141,35 +102,6 @@ def master_train(map_name,goal_point,train):
 
     
     return path
-
-def send_next_cmd(req_status):
-    # when the next command is requested, send it and remove it from the list.
-    global cmds
-    if cur_state == "done" and len(cmds) > 0: 
-        # only try to send a command if they are ready.
-        cmd = cmds.pop(0)
-        print("Sending command: ", cmd)
-        send_command(cmd)
-
-# turn the path (set of points) into a set of commands.
-def path_to_cmd():
-    # build up a list of commands from the path
-    global cmds,path
-    cmds = []
-    while len(path) > 0:
-        next = path.pop(0)
-        if next == 0:
-            cmds.append("north")
-        elif next == 1:
-            cmds.append("east")
-        elif next == 3:
-            cmds.append("west")
-        elif next == 2:
-            cmds.append("south")
-
-  
-    print("path_to_cmd finished.")
-    print(cmds)
 
 def retrieve_q(map_name):
     # Save out data to map_name.sarsa so we don't have to retrain on familiar maps
@@ -289,17 +221,14 @@ def train_sarsa_real_life(map_name, goal_point, train, count, max_count):
         # Choose A' from S' using policy dervied from Q (e.g. e-greedy)
         a_prime = e_greedy(eps, q, s_prime)
 
-        if not (s in q): # If Q is not initalized for our action set it to 0
+        if not (s in q):
             d={0:0, 1:0, 2:0, 3:0}
             q[s] = d
-       # elif not a in q[s]:
-           # q[s][a] = 0
+
         if not (s_prime in q):
             d={0:0, 1:0, 2:0, 3:0}
-           # d[a_prime] = 0
             q[s_prime] = d
-        #elif not a_prime in q[s_prime]:
-         #   q[s_prime][a_prime] = 0
+
     
         
         # Q(S,A) <- Q(S,A) + alpha[R+gamma * Q(S',A')- Q(S,A)]
@@ -310,6 +239,7 @@ def train_sarsa_real_life(map_name, goal_point, train, count, max_count):
         a = a_prime
         path.append(a)
         timeout+=1
+
     print(path)
     print("Crashed: " + str(crashed))
     write_q(map_name,q)
@@ -365,34 +295,46 @@ def execute_sim(action, state, q):
         r = map[state][action]['reward']
     return r, s_prime
 
+def decode_string(s):
+    if(s[8] == '-'):
+        y = -1 * int(s[9])
+    elif(len(s) >= 10 and s[9] == '-'):
+        y = -1 * int(s[10]) 
+    elif(s[3] == '-'):
+       y = int(s[9])        
+    else:
+        y = int(s[8])
+
+    if(s[3] == '-'):
+        x = -1 * int(s[4])
+    else:
+        x = int(s[3])
+    
+    return x,y
+
 def execute_rl(a,s):
     global map
     global vel
     global current_position
     global finished
     prev = copy.deepcopy(current_position)
-    send_command(decode_action(a))
+    #send_command(decode_action(a))
+    x,y = decode_string(s)
 
-    count = 0
+    if(a == 0):
+        x +=1
+    elif(a == 1):
+        y -= 1
+    elif(a == 2):
+        x -=1
+    elif(a ==3):
+        y +=1
+
+    new_position = Pose2D(x,y,0)
+    if not (check_global(new_position)):
+        current_position = new_position  
+    
     crashed = False
-    crashed_count = 0
-    timeout =0
-    while count < 5 and crashed_count < 50 and timeout < 600:
-        if (abs(vel.linear.x) < .1 and abs(vel.angular.z) < .5):
-            count +=1
-        else:
-            count =0
-        crashed = abs(vel.linear.x) > .5 and current_position != prev
-        if(crashed):
-            crashed_count +=1
-        else:
-            crashed_count =0
-        rospy.sleep(.1)  
-
-        timeout +=1
-   
-    if(timeout > 600):
-        crashed = True
     #print("Next")
     # return it's new location
     reward = -1
@@ -400,7 +342,7 @@ def execute_rl(a,s):
     if(s == s_prime):
         reward = -5
     if(crashed):
-        reward = -5
+        reward = -10
     #print("Start: "+s+ " Finish: " + s_prime)
     #print(reward)
     if not (s in map): # If Q is not initalized for our action set it to 0
@@ -413,56 +355,11 @@ def execute_rl(a,s):
         map[s][a] = {"state":s_prime,"reward":reward}
     return reward, s_prime, crashed
 
+def check_global(point):
+    global global_map
+    x = point.x + 5
+    y = (point.y*-1 + 5) 
+    return bool(global_map[y][x])
 
-def check_odom(odom_msg):
-    global vel
-    global current_position
-    current_position.x = round(odom_msg.pose.pose.position.x)
-    current_position.y = round(odom_msg.pose.pose.position.y) # round to nearest int
-    vel = odom_msg.twist.twist
-def send_command(keyword):
-    cmd_msg.data = keyword
-    command_pub.publish(cmd_msg)
-
-def update_state(timer_event):
-    # at each timer step, update the state and send an action
-    check_state()
-
-    # tell us the current state for debug
-    #print(cur_state)
-    #print([fwd_scan, l_scan, rear_scan, r_scan])
-
-def action_finished(msg):
-    global finished
-    finished = msg.data
-
-def main():
-    global command_pub, train, map_name
-
-    # initialize node
-    rospy.init_node('sarsa')
-    
-    train = rospy.get_param('~train')
-    map_name = rospy.get_param('~map_name')
-
-    # publish command to the turtlebot
-    command_pub = rospy.Publisher("/tp/cmd", String, queue_size=1)
-
-    # subscribe to the grouped scan values
-    # format is [fwd_scan, rear_scan, l45_scan, l_scan, r45_scan, r_scan]
-    rospy.Subscriber('/tp/scan', Int32MultiArray, get_scan_ranges, queue_size=1)
-    rospy.Subscriber('/tp/request', Bool, send_next_cmd, queue_size=1)
-    rospy.Subscriber('/odom', Odometry, check_odom, queue_size=1)
-    rospy.Subscriber('/tp/finish', Bool, action_finished, queue_size=1)
-
-    # Set up a timer to update robot's drive state at 1 Hz
-    rospy.Timer(rospy.Duration(secs=.25), update_state)
-    # pump callbacks
-    rospy.spin()
-
-
-if __name__ == '__main__':
-    try:
-        main()
-    except rospy.ROSInterruptException:
-        pass
+master_train("test1", goal_point, True)
+print("done")
