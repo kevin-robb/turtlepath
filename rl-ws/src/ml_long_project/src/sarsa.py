@@ -33,6 +33,7 @@ cur_state = "init"
 
 # Are we training or executing?
 train = None
+# what is the base map name?(set later)
 map_name = ""
 
 vel = Twist()
@@ -45,7 +46,7 @@ map = {}
 
 finished = False
 
-
+# Try several times to reset the stage after a crash
 def reset_stage():
     send_command('reset')
     rospy.sleep(1)
@@ -55,6 +56,7 @@ def reset_stage():
     rospy.sleep(1)
     send_command('reset')
 
+# Get the scan ranges
 def get_scan_ranges(scan_msg):
     global fwd_scan, rear_scan, l45_scan, l_scan, r45_scan, r_scan
     # format is [fwd_scan, rear_scan, l45_scan, l_scan, r45_scan, r_scan]
@@ -68,12 +70,14 @@ def get_scan_ranges(scan_msg):
     r45_scan = scan_msg.data[4] # ~45 degrees right
     r_scan = scan_msg.data[5] # 90 degrees right
 
+# Delete_q to train from scratch
 def delete_q(map_name):
     if os.path.exists(map_name + ".sarsa"):
         os.remove(map_name + ".sarsa")
     else:
         print("The file does not exist") 
 
+# Update the current state
 def check_state():
     global cur_state
     global train, map_name
@@ -82,42 +86,41 @@ def check_state():
         cur_state = "plan"
 
     elif cur_state == "plan":
-        #print("Train? " + str(train))
-        #path = train_sarsa_accel(map_name, map,start_point,goal_point,train)
         path = master_train(map_name,goal_point,train)
        
         if(len(path) > 0):
             cur_state = "execute"
             path_to_cmd()
     elif(cur_state == 'execute'):
-        #print ("Executing learned path")
-        #print(path)
-        #print(cmds)
         cur_state = 'done'
 
 def master_train(map_name,goal_point,train):
     global map
     #delete_q(map_name)
-    # train several times in real life to build a map
+    
     count = 0
     accelerate = True
     episode_num = 1
-    #dt = datetime.now()
+    dt = datetime.now()
     training_data = [[i,0, True] for i in range(episode_num)]
     satisfied = False
     s_count = 0
+
+    # We are going to train till we are satisfied with the results
     while not satisfied:
         s_count +=1
         count = 0
         for i in range(0,episode_num):
-            path, crashed = train_sarsa_real_life(map_name,goal_point,train, count,episode_num)
+            # Run some training in real life
+            path, crashed = train_sarsa_real_life(map_name,goal_point,train, count, episode_num)
             print(len(path))
             reset_stage()
             
             training_data[int(i)][1] = len(path)
             training_data[int(i)][2] = crashed
 
-            if(not crashed): # don't want to train till we have sufficent iterations and have a goal
+            # don't want to train till we have sufficent iterations and have a goal
+            if(not crashed): 
                 if(accelerate):
                     print("Accelerating Training")
                     # This path is always "the best found" since epsilon is zero on the last run
@@ -185,7 +188,7 @@ def retrieve_q(map_name):
 def write_q(map_name, q):
     pickle.dump(q, open(map_name + ".sarsa","wb"))
 
-def train_sarsa_accel(map_name, goal_point, iter_val):
+def train_sarsa_accel(map_name, goal_point, episode_num):
     global current_position
 
     alpha = .5
@@ -193,8 +196,6 @@ def train_sarsa_accel(map_name, goal_point, iter_val):
     eps  = .2
     # Episode
     episode = 0
-    # Want to see the path count_num times, which happens every episode_num iterations
-    episode_num = iter_val
 
     q = retrieve_q(map_name)
    
@@ -202,7 +203,6 @@ def train_sarsa_accel(map_name, goal_point, iter_val):
         if(episode == episode_num-1):
             #print("Turning off epsilon for max greedy")
             eps  = 0
-
 
         timeout = 0
         path = []
@@ -217,8 +217,8 @@ def train_sarsa_accel(map_name, goal_point, iter_val):
         # Choose A from S using policy dervied from Q (e.g. e-greedy)
         a = e_greedy(eps, q, s)
         path.append(a)
-        # Loop through episode
-        # We don't monitor crashed in simulation since it's hard to monitor (and shouldn't happen)
+       
+        # We don't monitor crashed in simulation since it's hard to simulate (and shouldn't happen ideally)
         while timeout < 100 and s != to_str(goal_point):
             # Take action A, observe R,S'
             r, s_prime = execute_sim(a,s,q)
@@ -288,19 +288,15 @@ def train_sarsa_real_life(map_name, goal_point, train, count, max_count):
         r, s_prime, crashed = execute_rl(a,s)
         # Choose A' from S' using policy dervied from Q (e.g. e-greedy)
         a_prime = e_greedy(eps, q, s_prime)
-
-        if not (s in q): # If Q is not initalized for our action set it to 0
+        
+        # If Q is not initalized for our action set it to 0
+        if not (s in q): 
             d={0:0, 1:0, 2:0, 3:0}
             q[s] = d
-       # elif not a in q[s]:
-           # q[s][a] = 0
+
         if not (s_prime in q):
             d={0:0, 1:0, 2:0, 3:0}
-           # d[a_prime] = 0
             q[s_prime] = d
-        #elif not a_prime in q[s_prime]:
-         #   q[s_prime][a_prime] = 0
-    
         
         # Q(S,A) <- Q(S,A) + alpha[R+gamma * Q(S',A')- Q(S,A)]
         q[s][a] = q[s][a] + alpha * (r+gamma*q[s_prime][a_prime] - q[s][a])

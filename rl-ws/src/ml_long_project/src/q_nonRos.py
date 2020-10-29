@@ -19,6 +19,7 @@ import numpy as np
 from datetime import datetime
 import pandas as pd
 import os
+import math
 
 ## Global Variables
 # mobile_base velocity publisher
@@ -51,8 +52,8 @@ def reset_stage():
     current_position = Pose2D(-2,-2,0)
 
 def delete_q(map_name):
-    if os.path.exists(map_name + ".sarsa"):
-        os.remove(map_name + ".sarsa")
+    if os.path.exists(map_name + ".q"):
+        os.remove(map_name + ".q")
     else:
         print("The file does not exist") 
 
@@ -61,7 +62,6 @@ def master_train(map_name,goal_point,train):
     delete_q(map_name)
     # train several times in real life to build a map
     count = 0
-    accelerate = True
     episode_num = 50
     dt = datetime.now()
     training_data = [[i,0, True] for i in range(episode_num)]
@@ -71,7 +71,7 @@ def master_train(map_name,goal_point,train):
         s_count +=1
         count = 0
         for i in range(0,episode_num):
-            path, crashed = train_sarsa_real_life(map_name,goal_point,train, count,episode_num)
+            path, crashed = train_q_real_life(map_name,goal_point,train, count,episode_num)
             print(len(path))
             reset_stage()
             
@@ -79,7 +79,7 @@ def master_train(map_name,goal_point,train):
             training_data[int(i)][2] = crashed
 
             count += 1
-        if(len(path) > 17):
+        if(len(path) > 16):
             satisfied = False
         else:
             print("Took: " + str(s_count*episode_num))
@@ -87,7 +87,7 @@ def master_train(map_name,goal_point,train):
 
     # save data each count from training to use for plots and analysis
     filepath = "/home/"+getuser()+"/turtlepath/rl-ws/data/"
-    filename = "sarsa_" + map_name + "_" + dt.strftime("%Y-%m-%d-%H-%M-%S") + "_c" + str(count)
+    filename = "q_" + map_name + "_" + dt.strftime("%Y-%m-%d-%H-%M-%S") + "_c" + str(count)
     np.savetxt(filepath + filename + ".csv", training_data, delimiter=",")
 
     
@@ -97,7 +97,7 @@ def retrieve_q(map_name):
     # Save out data to map_name.sarsa so we don't have to retrain on familiar maps
     #pickle.dump(map, open("sarsa_data/"+map_name + ".sarsa","wb"))
     try:
-        q = pickle.load( open(map_name + ".sarsa", "rb" ) )
+        q = pickle.load( open(map_name + ".q", "rb" ) )
         q = dict(q)
     except (OSError, IOError) as e:
         # There are states(x,y) and 4 Actions (up, down, right, left)
@@ -105,21 +105,21 @@ def retrieve_q(map_name):
     return q
 
 def write_q(map_name, q):
-    pickle.dump(q, open(map_name + ".sarsa","wb"))
+    pickle.dump(q, open(map_name + ".q","wb"))
 
-def train_sarsa_real_life(map_name, goal_point, train, count, max_count):
+def train_q_real_life(map_name, goal_point, train, count, max_count):
     # set date which is used in data output filenames
     dt = datetime.now()
     global current_position
-    alpha = .6
-    gamma = .99
-    eps  = .2
+    alpha = .05
+    gamma = .9
+    eps  = .3
 
     q = retrieve_q(map_name)
 
     if(count < 2):
         eps = 1 # totally random walk to build a better model
-    elif(count == max_count -1):
+    if(count == max_count -1):
         eps = .05
 
     timeout = 0
@@ -153,7 +153,7 @@ def train_sarsa_real_life(map_name, goal_point, train, count, max_count):
     
         
         # Q(S,A) <- Q(S,A) + alpha[R+gamma * Q(S',A')- Q(S,A)]
-        q[s][a] = q[s][a] + alpha * (r+gamma*q[s_prime][a_prime] - q[s][a])
+        q[s][a] = q[s][a] + alpha * (r+gamma* max_q(q,s_prime) - q[s][a])
 
         # S<- S'; A<-A';
         s = s_prime
@@ -165,6 +165,16 @@ def train_sarsa_real_life(map_name, goal_point, train, count, max_count):
     print("Crashed: " + str(crashed))
     write_q(map_name,q)
     return path, crashed
+
+def max_q(q, s_prime):
+    #print("finding max q for ", s_prime.x, s_prime.y)
+    # after we take action A and arrive at state S', 
+    #   we will find the highest Q value for S' with any available action A'.
+    max_q = -math.inf
+    for a_prime in range(4):
+        if q[s_prime][a_prime] > max_q:
+            max_q = q[s_prime][a_prime]
+    return max_q
 
 def to_str(s):
     return("X: "+ str(s.x) + " "+"Y: "+ str(s.y))

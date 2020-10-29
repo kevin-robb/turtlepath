@@ -19,6 +19,7 @@ import numpy as np
 from datetime import datetime
 import pandas as pd
 import os
+import math
 
 ## Global Variables
 # mobile_base velocity publisher
@@ -51,17 +52,20 @@ def reset_stage():
     current_position = Pose2D(-2,-2,0)
 
 def delete_q(map_name):
-    if os.path.exists(map_name + ".sarsa"):
-        os.remove(map_name + ".sarsa")
+    if os.path.exists(map_name + ".q1"):
+        os.remove(map_name + ".q1")
     else:
         print("The file does not exist") 
-
+    
+    if os.path.exists(map_name + ".q2"):
+        os.remove(map_name + ".q2")
+    else:
+        print("The file does not exist") 
 def master_train(map_name,goal_point,train):
     global map
     delete_q(map_name)
     # train several times in real life to build a map
     count = 0
-    accelerate = True
     episode_num = 50
     dt = datetime.now()
     training_data = [[i,0, True] for i in range(episode_num)]
@@ -71,7 +75,7 @@ def master_train(map_name,goal_point,train):
         s_count +=1
         count = 0
         for i in range(0,episode_num):
-            path, crashed = train_sarsa_real_life(map_name,goal_point,train, count,episode_num)
+            path, crashed = train_q_real_life(map_name,goal_point,train, count,episode_num)
             print(len(path))
             reset_stage()
             
@@ -79,7 +83,7 @@ def master_train(map_name,goal_point,train):
             training_data[int(i)][2] = crashed
 
             count += 1
-        if(len(path) > 17):
+        if(len(path) > 16):
             satisfied = False
         else:
             print("Took: " + str(s_count*episode_num))
@@ -87,7 +91,7 @@ def master_train(map_name,goal_point,train):
 
     # save data each count from training to use for plots and analysis
     filepath = "/home/"+getuser()+"/turtlepath/rl-ws/data/"
-    filename = "sarsa_" + map_name + "_" + dt.strftime("%Y-%m-%d-%H-%M-%S") + "_c" + str(count)
+    filename = "q_" + map_name + "_" + dt.strftime("%Y-%m-%d-%H-%M-%S") + "_c" + str(count)
     np.savetxt(filepath + filename + ".csv", training_data, delimiter=",")
 
     
@@ -97,29 +101,34 @@ def retrieve_q(map_name):
     # Save out data to map_name.sarsa so we don't have to retrain on familiar maps
     #pickle.dump(map, open("sarsa_data/"+map_name + ".sarsa","wb"))
     try:
-        q = pickle.load( open(map_name + ".sarsa", "rb" ) )
-        q = dict(q)
+        q1 = pickle.load( open(map_name + ".q1", "rb" ) )
+        q1 = dict(q1)
+        q2 = pickle.load( open(map_name + ".q2", "rb" ) )
+        q2 = dict(q2)
     except (OSError, IOError) as e:
         # There are states(x,y) and 4 Actions (up, down, right, left)
-        q = {}
-    return q
+        q1 = {}
+        q2 = {}
+    return q1, q2
 
-def write_q(map_name, q):
-    pickle.dump(q, open(map_name + ".sarsa","wb"))
+def write_q(map_name, q1,q2):
+    pickle.dump(q1, open(map_name + ".q1","wb"))
+    pickle.dump(q2, open(map_name + ".q2","wb"))
+def train_q_real_life(map_name, goal_point, train, count, max_count):
+    #https://towardsdatascience.com/double-q-learning-the-easy-way-a924c4085ec3
 
-def train_sarsa_real_life(map_name, goal_point, train, count, max_count):
     # set date which is used in data output filenames
     dt = datetime.now()
     global current_position
-    alpha = .6
-    gamma = .99
-    eps  = .2
+    alpha = .05
+    gamma = .9
+    eps  = .3
 
-    q = retrieve_q(map_name)
+    q1,q2 = retrieve_q(map_name)
 
     if(count < 2):
         eps = 1 # totally random walk to build a better model
-    elif(count == max_count -1):
+    if(count == max_count -1):
         eps = .05
 
     timeout = 0
@@ -132,39 +141,76 @@ def train_sarsa_real_life(map_name, goal_point, train, count, max_count):
     # s is state and equals a point in the map
     s = to_str(current_position)
     # Choose A from S using policy dervied from Q (e.g. e-greedy)
-    a = e_greedy(eps, q, s)
-    path.append(a)
     # Loop through episode
     crashed = False
     while timeout < 1000 and s != to_str(goal_point) and not crashed:
-        # Take action A, observe R,S'
-        r, s_prime, crashed = execute_rl(a,s)
-        # Choose A' from S' using policy dervied from Q (e.g. e-greedy)
-        a_prime = e_greedy(eps, q, s_prime)
+ 
+        p = np.random.random() 
+        if p < .5:
+            a1 = e_greedy(eps, q1, s) 
+            r, s_prime, crashed = execute_rl(a1,s)
+            if not (s in q1):
+                d={0:0, 1:0, 2:0, 3:0}
+                q1[s] = d
 
-        if not (s in q):
-            d={0:0, 1:0, 2:0, 3:0}
-            q[s] = d
+            if not (s_prime in q1):
+                d={0:0, 1:0, 2:0, 3:0}
+                q1[s_prime] = d
+            
+            if not (s in q2):
+                d={0:0, 1:0, 2:0, 3:0}
+                q2[s] = d
 
-        if not (s_prime in q):
-            d={0:0, 1:0, 2:0, 3:0}
-            q[s_prime] = d
+            if not (s_prime in q2):
+                d={0:0, 1:0, 2:0, 3:0}
+                q2[s_prime] = d
 
-    
-        
-        # Q(S,A) <- Q(S,A) + alpha[R+gamma * Q(S',A')- Q(S,A)]
-        q[s][a] = q[s][a] + alpha * (r+gamma*q[s_prime][a_prime] - q[s][a])
+            a_star = np.argmax([q1[s_prime][a] for a in q1[s_prime]])
+            q1[s][a1] = q1[s][a1] + alpha * (r+gamma* q2[s_prime][a_star] - q1[s][a1])
+            a = a1
+        else: 
+            a2 = e_greedy(eps, q2, s) 
+            r, s_prime, crashed = execute_rl(a2,s)
+            if not (s in q1):
+                d={0:0, 1:0, 2:0, 3:0}
+                q1[s] = d
+
+            if not (s_prime in q1):
+                d={0:0, 1:0, 2:0, 3:0}
+                q1[s_prime] = d
+            
+            if not (s in q2):
+                d={0:0, 1:0, 2:0, 3:0}
+                q2[s] = d
+
+            if not (s_prime in q2):
+                d={0:0, 1:0, 2:0, 3:0}
+                q2[s_prime] = d
+
+
+            a_star = np.argmax([q2[s_prime][a] for a in q2[s_prime]])
+            q2[s][a2] = q2[s][a2] + alpha * (r+gamma* q1[s_prime][a_star] - q2[s][a2])
+            a = a2
 
         # S<- S'; A<-A';
         s = s_prime
-        a = a_prime
         path.append(a)
         timeout+=1
 
     print(path)
     print("Crashed: " + str(crashed))
-    write_q(map_name,q)
+    write_q(map_name,q1,q2)
     return path, crashed
+
+def max_q(q, s_prime):
+    #print("finding max q for ", s_prime.x, s_prime.y)
+    # after we take action A and arrive at state S', 
+    #   we will find the highest Q value for S' with any available action A'.
+    max_q = -math.inf
+    for a_prime in range(4):
+        if q[s_prime][a_prime] > max_q:
+            max_q = q[s_prime][a_prime]
+    return max_q
 
 def to_str(s):
     return("X: "+ str(s.x) + " "+"Y: "+ str(s.y))
