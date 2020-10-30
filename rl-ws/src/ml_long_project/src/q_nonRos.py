@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import rospy
+#import rospy
 from random import randint
 #import time
 from geometry_msgs.msg import Twist, Vector3, Point, Quaternion, Pose2D
@@ -17,7 +17,7 @@ import sys
 import numpy as np
 #from os import getcwd
 from datetime import datetime
-import pandas as pd
+#import pandas as pd
 import os
 import math
 
@@ -41,7 +41,7 @@ current_position = Pose2D(-2,-2,0)
 
 goal_point =  Pose2D(4,4,0) # Weird coord transform error
 path = []
-global_map =np.genfromtxt("/home/lelliott/turtlepath/rl-ws/map.csv", delimiter=',')
+global_map =np.genfromtxt("/home/"+getuser()+"/turtlepath/rl-ws/map.csv", delimiter=',')
 map = {}
 
 finished = False
@@ -257,6 +257,9 @@ def execute_rl(a,s):
         reward = -5
     if(crashed):
         reward = -10
+    # give a big reward for reaching the goal
+    if current_position == goal_point:
+        reward = 100
     #print("Start: "+s+ " Finish: " + s_prime)
     #print(reward)
     if not (s in map): # If Q is not initalized for our action set it to 0
