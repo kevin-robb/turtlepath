@@ -79,11 +79,11 @@ def master_train(map_name,goal_point,train):
             training_data[int(i)][2] = crashed
 
             count += 1
-        if(len(path) > 19):
-            satisfied = False
-        else:
-            print("Took: " + str(s_count*episode_num))
-            satisfied = True
+            if(len(path) > 19):
+                satisfied = False
+            else:
+                print("Took: " + str(s_count*episode_num))
+                satisfied = True
 
     # save data each count from training to use for plots and analysis
     filepath = "/home/"+getuser()+"/turtlepath/rl-ws/data/"

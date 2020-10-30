@@ -62,7 +62,7 @@ def master_train(map_name,goal_point,train):
     delete_q(map_name)
     # train several times in real life to build a map
     count = 0
-    episode_num = 50
+    episode_num = 25
     dt = datetime.now()
     training_data = [[i,0, True] for i in range(episode_num)]
     satisfied = False
@@ -79,11 +79,11 @@ def master_train(map_name,goal_point,train):
             training_data[int(i)][2] = crashed
 
             count += 1
-        if(len(path) > 19):
-            satisfied = False
-        else:
-            print("Took: " + str(s_count*episode_num))
-            satisfied = True
+            if(len(path) > 19):
+                satisfied = False
+            else:
+                print("Took: " + str(s_count*episode_num))
+                satisfied = True
 
     # save data each count from training to use for plots and analysis
     filepath = "/home/"+getuser()+"/turtlepath/rl-ws/data/"
