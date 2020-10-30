@@ -112,11 +112,11 @@ def master_train(map_name,goal_point,train):
         count = 0
         for i in range(0,episode_num):
             # Run some training in real life
-            path, crashed = train_sarsa_real_life(map_name,goal_point,train, count, episode_num)
-            print(len(path))
+            path1, crashed = train_sarsa_real_life(map_name,goal_point,train, count,episode_num)
+            print(len(path1))
             reset_stage()
             
-            training_data[int(i)][1] = len(path)
+            training_data[int(i)][1] = len(path1)
             training_data[int(i)][2] = crashed
 
             # don't want to train till we have sufficent iterations and have a goal
@@ -124,14 +124,14 @@ def master_train(map_name,goal_point,train):
                 if(accelerate):
                     print("Accelerating Training")
                     # This path is always "the best found" since epsilon is zero on the last run
-                    path, goal_met = train_sarsa_accel(map_name, goal_point, 1)
-                    print("accelerator reached goal? : " + str(goal_met))
-                    print(len(path))
-                    print("Accelerator Path:")
-                    print(path)
-                    print(len(path))
+                    path2, goal_met = train_sarsa_accel(map_name, goal_point, 30)
+                    # print("accelerator reached goal? : " + str(goal_met))
+                    # print(len(path))
+                    # print("Accelerator Path:")
+                    # print(path)
+                    # print(len(path))
             count += 1
-        if(len(path) > 16 or crashed):
+        if(len(path1) > 19 or crashed):
             satisfied = False
         else:
             print("Took: " + str(s_count*episode_num))
@@ -139,7 +139,7 @@ def master_train(map_name,goal_point,train):
 
     # save data each count from training to use for plots and analysis
     filepath = "/home/"+getuser()+"/turtlepath/rl-ws/data/"
-    filename = "sarsa_" + map_name + "_" + dt.strftime("%Y-%m-%d-%H-%M-%S") + "_c" + str(count)
+    filename = "accel_sarsa_" + map_name + "_" + dt.strftime("%Y-%m-%d-%H-%M-%S") + "_c" + str(count)
     np.savetxt(filepath + filename + ".csv", training_data, delimiter=",")
 
     
@@ -192,7 +192,7 @@ def train_sarsa_accel(map_name, goal_point, episode_num):
     global current_position
 
     alpha = .5
-    gamma = .9
+    gamma = .99
     eps  = .2
     # Episode
     episode = 0
@@ -200,9 +200,7 @@ def train_sarsa_accel(map_name, goal_point, episode_num):
     q = retrieve_q(map_name)
    
     while episode < episode_num:
-        if(episode == episode_num-1):
-            #print("Turning off epsilon for max greedy")
-            eps  = 0
+
 
         timeout = 0
         path = []
@@ -216,10 +214,11 @@ def train_sarsa_accel(map_name, goal_point, episode_num):
         s = to_str(current_position)
         # Choose A from S using policy dervied from Q (e.g. e-greedy)
         a = e_greedy(eps, q, s)
-        path.append(a)
        
         # We don't monitor crashed in simulation since it's hard to simulate (and shouldn't happen ideally)
-        while timeout < 100 and s != to_str(goal_point):
+        while timeout < 1000 and s != to_str(goal_point):
+            path.append(a)
+
             # Take action A, observe R,S'
             r, s_prime = execute_sim(a,s,q)
             # Choose A' from S' using policy dervied from Q (e.g. e-greedy)
@@ -245,7 +244,6 @@ def train_sarsa_accel(map_name, goal_point, episode_num):
             # S<- S'; A<-A';
             s = s_prime
             a = a_prime
-            path.append(a)
             timeout +=1
 
         episode +=1
@@ -280,10 +278,10 @@ def train_sarsa_real_life(map_name, goal_point, train, count, max_count):
     s = to_str(current_position)
     # Choose A from S using policy dervied from Q (e.g. e-greedy)
     a = e_greedy(eps, q, s)
-    path.append(a)
     # Loop through episode
     crashed = False
     while timeout < 1000 and s != to_str(goal_point) and not crashed:
+        path.append(a)
         # Take action A, observe R,S'
         r, s_prime, crashed = execute_rl(a,s)
         # Choose A' from S' using policy dervied from Q (e.g. e-greedy)
@@ -304,12 +302,11 @@ def train_sarsa_real_life(map_name, goal_point, train, count, max_count):
         # S<- S'; A<-A';
         s = s_prime
         a = a_prime
-        path.append(a)
         timeout+=1
     print(path)
     print("Crashed: " + str(crashed))
     write_q(map_name,q)
-    return path, crashed
+    return path, s != to_str(goal_point) or crashed
 
 def to_str(s):
     return("X: "+ str(s.x) + " "+"Y: "+ str(s.y))
