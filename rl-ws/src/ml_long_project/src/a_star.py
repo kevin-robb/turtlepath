@@ -19,7 +19,7 @@ cur_state = "init"
 
 map = []
 start_point = Pose2D(7,7,0)
-goal_point =  Pose2D(3,8,0) # was initially Pose2D(1,1,0)
+goal_point =  Pose2D(1,1,0) # was initially Pose2D(1,1,0)
 # list of Pose2Ds representing points on the path
 path = None
 # list of commands generated to follow the path
@@ -173,7 +173,6 @@ def get_map(map_msg):
     small_map = np.zeros((int(map_msg.info.width*resolution)+1,int(map_msg.info.width*resolution)+1))
     
     # Save it out to view at as a csv
-    # np.savetxt("/home/lelliott/turtlepath/rl-ws/demofile2.csv", big_map, delimiter=",")
 
     for x in range(small_map.shape[0]):
         for y in range(small_map.shape[1]):
@@ -189,6 +188,7 @@ def get_map(map_msg):
         
     # Small map is a downsampled map at the 1m x 1m "vertexes" of big map
     small_map = np.fliplr(np.flipud(small_map.transpose()))
+    np.savetxt("/home/lelliott/turtlepath/rl-ws/map1.csv", np.rot90(small_map,axes=(1,0)), delimiter=",")
     print(small_map)
     map = small_map
 

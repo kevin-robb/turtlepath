@@ -83,7 +83,7 @@ def master_train(map_name,goal_point,train):
             training_data[int(i)][2] = crashed
 
             count += 1
-        if(len(path) > 16):
+        if(len(path) > 19):
             satisfied = False
         else:
             print("Took: " + str(s_count*episode_num))
@@ -91,7 +91,7 @@ def master_train(map_name,goal_point,train):
 
     # save data each count from training to use for plots and analysis
     filepath = "/home/"+getuser()+"/turtlepath/rl-ws/data/"
-    filename = "q_" + map_name + "_" + dt.strftime("%Y-%m-%d-%H-%M-%S") + "_c" + str(count)
+    filename = "double_q_" + map_name + "_" + dt.strftime("%Y-%m-%d-%H-%M-%S") + "_c" + str(count)
     np.savetxt(filepath + filename + ".csv", training_data, delimiter=",")
 
     

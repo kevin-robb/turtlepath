@@ -97,7 +97,7 @@ def check_state():
 def master_train(map_name,goal_point,train):
     global map
     delete_q(map_name)
-    
+
     count = 0
     accelerate = True
     episode_num = 1
@@ -387,7 +387,7 @@ def execute_rl(a,s):
 
         timeout +=1
    
-    if(timeout > 600):
+    if(timeout > 250):
         crashed = True
     #print("Next")
     # return it's new location

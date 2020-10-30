@@ -79,7 +79,7 @@ def master_train(map_name,goal_point,train):
             training_data[int(i)][2] = crashed
 
             count += 1
-        if(len(path) > 16):
+        if(len(path) > 19):
             satisfied = False
         else:
             print("Took: " + str(s_count*episode_num))
@@ -133,10 +133,11 @@ def train_q_real_life(map_name, goal_point, train, count, max_count):
     s = to_str(current_position)
     # Choose A from S using policy dervied from Q (e.g. e-greedy)
     a = e_greedy(eps, q, s)
-    path.append(a)
     # Loop through episode
     crashed = False
     while timeout < 1000 and s != to_str(goal_point) and not crashed:
+        path.append(a)
+
         # Take action A, observe R,S'
         r, s_prime, crashed = execute_rl(a,s)
         # Choose A' from S' using policy dervied from Q (e.g. e-greedy)
@@ -158,7 +159,6 @@ def train_q_real_life(map_name, goal_point, train, count, max_count):
         # S<- S'; A<-A';
         s = s_prime
         a = a_prime
-        path.append(a)
         timeout+=1
 
     print(path)
