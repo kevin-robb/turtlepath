@@ -62,7 +62,7 @@ def master_train(map_name,goal_point,train):
     # train several times in real life to build a map
     count = 0
     accelerate = True
-    episode_num = 50
+    episode_num = 25
     dt = datetime.now()
     training_data = [[i,0, True] for i in range(episode_num)]
     satisfied = False
@@ -81,7 +81,7 @@ def master_train(map_name,goal_point,train):
                 if(accelerate):
                     print("Accelerating Training")
                     # This path is always "the best found" since epsilon is zero on the last run
-                    path2, goal_met = train_sarsa_accel(map_name, goal_point, 3)
+                    path2, goal_met = train_sarsa_accel(map_name, goal_point, 30)
                     # print("accelerator reached goal? : " + str(goal_met))
                     print(len(path2))
                     # print("Accelerator Path:")
@@ -120,7 +120,7 @@ def train_sarsa_accel(map_name, goal_point, episode_num):
     global current_position
 
     alpha = .5
-    gamma = .9
+    gamma = .99
     eps  = .2
     # Episode
     episode = 0
