@@ -9,12 +9,134 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+# Data Analysis 10-30-2020
+
+## Q-Learning (Reward for Reaching Goal)
+
+```{r}
+filename = "q_test1_2020-10-30-18-41-09"
+filedir = "q_test_data/"
+
+# loop through all files and store key values
+counts = c(1:9)
+for (count in counts) {
+  filepath <- paste(filedir, filename, "_c", count-1, ".csv", sep="")
+  print(filepath)
+  df <- read.csv(file=filepath)
+  names(df) <- c("episode", "steps", "extra")
+
+  # plot the data
+  with(df, plot(episode, steps, type="l"))
+}
+```
+
+## Q-Learning (No Reward for Goal)
+
+```{r}
+filename = "q_2020-10-30-17-49-00"
+filedir = "good_data/"
+
+# loop through all files and store key values
+counts = c(1:6)
+for (count in counts) {
+  filepath <- paste(filedir, filename, "_c", count-1, ".csv", sep="")
+  print(filepath)
+  df <- read.csv(file=filepath)
+  names(df) <- c("episode", "steps", "extra")
+
+  # plot the data
+  with(df, plot(episode, steps, type="l"))
+}
+```
+
+## Double Q-Learning
+
+```{r}
+filename = "double_q_2020-10-30-17-50-08"
+filedir = "good_data/"
+
+# loop through all files and store key values
+counts = c(1:6)
+for (count in counts) {
+  filepath <- paste(filedir, filename, "_c", count-1, ".csv", sep="")
+  print(filepath)
+  df <- read.csv(file=filepath)
+  names(df) <- c("episode", "steps", "extra")
+
+  # plot the data
+  with(df, plot(episode, steps, type="l"))
+}
+```
+
+## SARSA (No ROS)
+
+```{r}
+filename = "sarsa_2020-10-30-17-47-33"
+filedir = "good_data/"
+
+# loop through all files and store key values
+counts = c(1:6)
+for (count in counts) {
+  filepath <- paste(filedir, filename, "_c", count-1, ".csv", sep="")
+  print(filepath)
+  df <- read.csv(file=filepath)
+  names(df) <- c("episode", "steps", "extra")
+
+  # plot the data
+  with(df, plot(episode, steps, type="l"))
+}
+```
+
+## SARSA (Accelerated)
+
+```{r}
+filename = "accel_sarsa_2020-10-30-17-59-41"
+filedir = "good_data/"
+
+# loop through all files and store key values
+counts = c(1:6)
+for (count in counts) {
+  filepath <- paste(filedir, filename, "_c", count-1, ".csv", sep="")
+  print(filepath)
+  df <- read.csv(file=filepath)
+  names(df) <- c("episode", "steps", "extra")
+
+  # plot the data
+  with(df, plot(episode, steps, type="l"))
+}
+```
+
+
+## Expected SARSA
+
+```{r}
+filename = "exp_sarsa_2020-10-30-17-48-05"
+filedir = "good_data/"
+
+# loop through all files and store key values
+counts = c(1:6)
+for (count in counts) {
+  filepath <- paste(filedir, filename, "_c", count-1, ".csv", sep="")
+  print(filepath)
+  df <- read.csv(file=filepath)
+  names(df) <- c("episode", "steps", "extra")
+
+  # plot the data
+  with(df, plot(episode, steps, type="l"))
+}
+```
+
+
+-----------------------------------------------------------------------------------------------------------------------------------
+
+# Older irrelevant stuff
+
 # Code to read in a single file and plot it manually
 
 ```{r}
 # first read in and setup the data
 # set the filename for each file to plot
-filename = "ql_map1_2020-10-23-10-51-19_c2"
+filename = "ql_map1_2020-10-29-12-41-33_c0"
 filedir = "data/"
 filepath <- paste(filedir, filename, ".csv", sep="")
 print(filepath)
@@ -31,7 +153,7 @@ with(df, plot(episode, steps, type="l"))
 
 ```{r}
 # set the filename. depends on the time it was run
-filename = "ql_map1_2020-10-23-10-51-19"
+filename = "ql_map1_2020-10-29-12-41-33"
 filedir = "data/"
 
 # create list that will contain key values from each file
