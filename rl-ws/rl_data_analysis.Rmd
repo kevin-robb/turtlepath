@@ -11,23 +11,56 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Data Analysis 10-30-2020
 
-## Q-Learning (Reward for Reaching Goal)
+## Q-Learning (With Reward for Reaching Goal)
 
 ```{r}
 filename = "q_test1_2020-10-30-18-41-09"
 filedir = "q_test_data/"
 
+# put all the data in the same dataframe to use ggplot
+range = c(1:24)
+df <- data.frame("episode" = range, "y" = range) #, "y1" = range, "y2" = range, "y3" = range, "y4" = range, "y5" = range)
+
 # loop through all files and store key values
-counts = c(1:9)
+counts = c(1:5)
 for (count in counts) {
   filepath <- paste(filedir, filename, "_c", count-1, ".csv", sep="")
   print(filepath)
-  df <- read.csv(file=filepath)
-  names(df) <- c("episode", "steps", "extra")
-
-  # plot the data
-  with(df, plot(episode, steps, type="l"))
+  df_c <- read.csv(file=filepath)
+  names(df_c) <- c("episode", "steps","extra")
+  # store the steps
+  #var = paste("y",count, sep="")
+  df[count+1] = df_c$steps
 }
+# see the new dataframe which has all the datasets' steps as columns 2+
+head(df)
+
+# overlay all the graphs using ggplot
+require(ggplot2)
+# define the colors we want to use
+colors = c("indianred", "indianred1", "indianred2", "indianred3", "indianred4", "lightsalmon1", "lightsalmon2", "lightsalmon3", "lightsalmon4")
+# add the x values
+g <- ggplot(df, aes(episode))
+# add all the sets of y values
+for (count in counts) {
+  g <- g + geom_line(aes_string(y=df[,count+1]), colour=colors[count])
+}
+# add the labels
+g <- g + ylab("# of Steps to Reach Goal") + xlab("Episode")
+# add the title
+g <- g + ggtitle("Q-Learning") + theme(plot.title=element_text(color="indianred"))
+# show the plot
+g
+
+# Save the plot to a file
+
+# open the file
+filepath = paste("plots/", filename, ".png", sep="")
+png(file=filepath, width=600, height=350)
+# show the plot
+g
+# close the file
+dev.off()
 ```
 
 ## Q-Learning (No Reward for Goal)
