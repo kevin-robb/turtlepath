@@ -11,25 +11,87 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Data Analysis 10-30-2020
 
-## Q-Learning (With Reward for Reaching Goal)
+## Set parameters that determine which dataset will be acted on
+
+Requires that all files for a dataset be named the same "filename" followed by "_cX" where integer X starts at 0 and increases by 1 for each additional file.
+
+To plot a dataset, run the R chunk including the setup data for that set, and then run the R chunk under "Plot the data and save as a png."
+
+### Q-Learning (With Reward for Reaching Goal)
 
 ```{r}
+title = "Q-Learning"
 filename = "q_test1_2020-10-30-18-41-09"
 filedir = "q_test_data/"
+num_files = 9
+# define the colors we want to use for the plots. The first color will be used for the title.
+colors = c("indianred", "indianred1", "indianred2", "indianred3", "indianred4", "lightsalmon1", "lightsalmon2", "lightsalmon3", "lightsalmon4")
+```
 
+### Q-Learning (No Reward for Goal)
+
+```{r}
+title = "Q-Learning (Only Negative Reward)"
+filename = "q_2020-10-30-17-49-00"
+filedir = "good_data/"
+num_files = 6
+colors = c("indianred", "indianred1", "indianred2", "indianred3", "indianred4","lightsalmon4")
+```
+
+### Double Q-Learning
+
+```{r}
+title = "Double Q-Learning"
+filename = "double_q_2020-10-30-17-50-08"
+filedir = "good_data/"
+num_files = 6
+colors = c("indianred", "indianred1", "indianred2", "indianred3", "indianred4","lightsalmon4")
+```
+
+### SARSA (No ROS)
+
+```{r}
+title = "SARSA"
+filename = "sarsa_2020-10-30-17-47-33"
+filedir = "good_data/"
+num_files = 6
+colors = c("royalblue","royalblue1","royalblue2","royalblue3","royalblue4","slateblue4")
+```
+
+### SARSA (Accelerated)
+
+```{r}
+title = "SARSA (Accelerated)"
+filename = "accel_sarsa_2020-10-30-17-59-41"
+filedir = "good_data/"
+num_files = 6
+colors = c("royalblue","royalblue1","royalblue2","royalblue3","royalblue4","slateblue4")
+```
+
+### Expected SARSA
+
+```{r}
+title = "Expected SARSA"
+filename = "exp_sarsa_2020-10-30-17-48-05"
+filedir = "good_data/"
+num_files = 6
+colors = c("royalblue","royalblue1","royalblue2","royalblue3","royalblue4","slateblue4")
+```
+
+## Plot the data and save as a png
+
+```{r}
 # put all the data in the same dataframe to use ggplot
-range = c(1:24)
-df <- data.frame("episode" = range, "y" = range) #, "y1" = range, "y2" = range, "y3" = range, "y4" = range, "y5" = range)
-
+range = c(1:24) #number of rows
+df <- data.frame("episode" = range, "y" = range)
+counts = c(1:num_files)
 # loop through all files and store key values
-counts = c(1:5)
 for (count in counts) {
   filepath <- paste(filedir, filename, "_c", count-1, ".csv", sep="")
   print(filepath)
   df_c <- read.csv(file=filepath)
   names(df_c) <- c("episode", "steps","extra")
-  # store the steps
-  #var = paste("y",count, sep="")
+  # store the steps to our big dataframe
   df[count+1] = df_c$steps
 }
 # see the new dataframe which has all the datasets' steps as columns 2+
@@ -37,8 +99,6 @@ head(df)
 
 # overlay all the graphs using ggplot
 require(ggplot2)
-# define the colors we want to use
-colors = c("indianred", "indianred1", "indianred2", "indianred3", "indianred4", "lightsalmon1", "lightsalmon2", "lightsalmon3", "lightsalmon4")
 # add the x values
 g <- ggplot(df, aes(episode))
 # add all the sets of y values
@@ -48,12 +108,11 @@ for (count in counts) {
 # add the labels
 g <- g + ylab("# of Steps to Reach Goal") + xlab("Episode")
 # add the title
-g <- g + ggtitle("Q-Learning") + theme(plot.title=element_text(color="indianred"))
+g <- g + ggtitle(title) + theme(plot.title=element_text(color=colors[1]))
 # show the plot
 g
 
 # Save the plot to a file
-
 # open the file
 filepath = paste("plots/", filename, ".png", sep="")
 png(file=filepath, width=600, height=350)
@@ -62,239 +121,3 @@ g
 # close the file
 dev.off()
 ```
-
-## Q-Learning (No Reward for Goal)
-
-```{r}
-filename = "q_2020-10-30-17-49-00"
-filedir = "good_data/"
-
-# loop through all files and store key values
-counts = c(1:6)
-for (count in counts) {
-  filepath <- paste(filedir, filename, "_c", count-1, ".csv", sep="")
-  print(filepath)
-  df <- read.csv(file=filepath)
-  names(df) <- c("episode", "steps", "extra")
-
-  # plot the data
-  with(df, plot(episode, steps, type="l"))
-}
-```
-
-## Double Q-Learning
-
-```{r}
-filename = "double_q_2020-10-30-17-50-08"
-filedir = "good_data/"
-
-# loop through all files and store key values
-counts = c(1:6)
-for (count in counts) {
-  filepath <- paste(filedir, filename, "_c", count-1, ".csv", sep="")
-  print(filepath)
-  df <- read.csv(file=filepath)
-  names(df) <- c("episode", "steps", "extra")
-
-  # plot the data
-  with(df, plot(episode, steps, type="l"))
-}
-```
-
-## SARSA (No ROS)
-
-```{r}
-filename = "sarsa_2020-10-30-17-47-33"
-filedir = "good_data/"
-
-# loop through all files and store key values
-counts = c(1:6)
-for (count in counts) {
-  filepath <- paste(filedir, filename, "_c", count-1, ".csv", sep="")
-  print(filepath)
-  df <- read.csv(file=filepath)
-  names(df) <- c("episode", "steps", "extra")
-
-  # plot the data
-  with(df, plot(episode, steps, type="l"))
-}
-```
-
-## SARSA (Accelerated)
-
-```{r}
-filename = "accel_sarsa_2020-10-30-17-59-41"
-filedir = "good_data/"
-
-# loop through all files and store key values
-counts = c(1:6)
-for (count in counts) {
-  filepath <- paste(filedir, filename, "_c", count-1, ".csv", sep="")
-  print(filepath)
-  df <- read.csv(file=filepath)
-  names(df) <- c("episode", "steps", "extra")
-
-  # plot the data
-  with(df, plot(episode, steps, type="l"))
-}
-```
-
-
-## Expected SARSA
-
-```{r}
-filename = "exp_sarsa_2020-10-30-17-48-05"
-filedir = "good_data/"
-
-# loop through all files and store key values
-counts = c(1:6)
-for (count in counts) {
-  filepath <- paste(filedir, filename, "_c", count-1, ".csv", sep="")
-  print(filepath)
-  df <- read.csv(file=filepath)
-  names(df) <- c("episode", "steps", "extra")
-
-  # plot the data
-  with(df, plot(episode, steps, type="l"))
-}
-```
-
-
------------------------------------------------------------------------------------------------------------------------------------
-
-# Older irrelevant stuff
-
-# Code to read in a single file and plot it manually
-
-```{r}
-# first read in and setup the data
-# set the filename for each file to plot
-filename = "ql_map1_2020-10-29-12-41-33_c0"
-filedir = "data/"
-filepath <- paste(filedir, filename, ".csv", sep="")
-print(filepath)
-df <- read.csv(file=filepath)
-names(df) <- c("episode", "steps")
-
-# plot the data
-with(df, plot(episode, steps, type="l"))
-```
-
-# Plot each count's average number of moves
-
-## Read in data
-
-```{r}
-# set the filename. depends on the time it was run
-filename = "ql_map1_2020-10-29-12-41-33"
-filedir = "data/"
-
-# create list that will contain key values from each file
-df_stats <- data.frame("count" = 1:5, "avg" = c(1:5), "min" = c(1:5), "max" = c(1:5))
-
-# loop through all files and store key values
-counts = c(1:5)
-for (count in counts) {
-  filepath <- paste(filedir, filename, "_c", count-1, ".csv", sep="")
-  print(filepath)
-  df <- read.csv(file=filepath)
-  names(df) <- c("episode", "steps")
-  #print(head(df))
-  #avg[[count]] = mean(df$steps)
-  df_stats$avg[count] = mean(df$steps)
-  #mins[[count]] = min(df$steps)
-  df_stats$min[count] = min(df$steps)
-  #maxes[[count]] = max(df$steps)
-  df_stats$max[count] = max(df$steps)
-}
-```
-
-## Plot the averages with min and max bars
-
-```{r}
-# plot the key values
-
-plot(counts, df_stats$avg,
-    ylim=range(c(min(df_stats$min), max(df_stats$max))),
-    pch=19, xlab="Count (Set of Episodes)", ylab="Steps Taken to Reach Goal", main="Avg and Range for Each Count"
-)
-# hack: we draw arrows but with very special "arrowheads"
-arrows(df_stats$count, df_stats$min, df_stats$count, df_stats$max, length=0.05, angle=90, code=3)
-
-```
-
-## Save the plot to a png
-
-```{r}
-# open the file
-filepath = paste("plots/", filename, ".png", sep="")
-png(file=filepath, width=600, height=350)
-# plot the data
-
-plot(counts, df_stats$avg,
-    ylim=range(c(min(df_stats$min), max(df_stats$max))),
-    pch=19, xlab="Count (Set of Episodes)", ylab="Steps Taken to Reach Goal", main="Avg and Range for Each Count"
-)
-# hack: we draw arrows but with very special "arrowheads"
-arrows(df_stats$count, df_stats$min, df_stats$count, df_stats$max, length=0.05, angle=90, code=3)
-
-# close the file
-dev.off()
-```
-
-# Try to do some fancy stuff (DOES NOT WORK)
-
-## Read in Data
-
-```{r}
-# set the filename. depends on the time it was run
-filename = "ql_map1_2020-10-23-10-51-19_c"
-filedir = "data/"
-
-# create list that will contain dataframes for each file
-my_data <- list()
-
-counts = c(1,2,3,4,5)
-for (count in counts) {
-  filepath <- paste(filedir, filename, count-1, ".csv", sep="")
-  print(filepath)
-  df <- read.csv(file=filepath)
-  names(df) <- c("episode", "steps")
-  #print(head(df))
-  my_data[[count]] = df #[2]
-  #print(head(my_data[count]))
-  #names(my_data[count]) <- "steps"
-  names(my_data[count]) <- paste("df", count, sep="")
-  #my_data[count] <- read.csv(file=filepath)
-}
-
-# name the list elements to match the files
-#names(my_data) <- gsub("\\.csv$", "", my_files)
-```
-
-## Plot Each Set and Save as PNG
-
-```{r}
-for (i in seq_along(my_data)) {
-  # open the file
-  filepath = paste("plots/c", i-1, ".png", sep="")
-  png(file=filepath, width=600, height=350)
-  # plot the data
-  this_df = paste("df", count, sep="")
-  x <- c(1:length(my_data[[i]]))
-  #x <- c(1:length(my_data$this_df))
-  #x <- my_data$this_df$episode
-  print(head(x))
-  y <- my_data[[i]] #$steps
-  #y <- my_data$this_df$steps
-  #print(head(y))
-  #with(my_data[i], plot(x,y))
-  title = paste("QL c", i-1, sep="")
-  #plot(x, y, type="l", main=title)
-  #points(x, y)
-  # close the file
-  dev.off()
-}
-```
-
-
