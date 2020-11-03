@@ -393,7 +393,7 @@ def execute_rl(a,s):
     if(s == s_prime):
         reward = -5
     if(crashed):
-        reward = -5
+        reward = -10
     #print("Start: "+s+ " Finish: " + s_prime)
     #print(reward)
     if not (s in map): # If Q is not initalized for our action set it to 0

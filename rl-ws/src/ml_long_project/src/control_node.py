@@ -57,19 +57,19 @@ def check_scan(scan_msg):
     # distance measurements in a full circle around the robot (0=fwd, CCW?)
 
     # update and discretize the important entries
-    fwd_scan = scan_discrete(scan_msg.ranges[0]) # directly forward
-    rear_scan = scan_discrete(scan_msg.ranges[320]) # directly behind
-    l45_scan = scan_discrete(scan_msg.ranges[80]) # ~45 degrees left
-    l_scan = scan_discrete(scan_msg.ranges[160]) # 90 degrees left
-    r45_scan = scan_discrete(scan_msg.ranges[560]) # ~45 degrees right
-    r_scan = scan_discrete(scan_msg.ranges[480]) # 90 degrees right
+    fwd_scan = scan_discrete(scan_msg.ranges[320]) # directly forward
+    rear_scan = scan_discrete(scan_msg.ranges[0]) # directly behind
+    r45_scan = scan_discrete(scan_msg.ranges[240]) # ~45 degrees left
+    r_scan = scan_discrete(scan_msg.ranges[160]) # 90 degrees left
+    l45_scan = scan_discrete(scan_msg.ranges[400]) # ~45 degrees right
+    l_scan = scan_discrete(scan_msg.ranges[480]) # 90 degrees right
 
-    off_left = scan_discrete(scan_msg.ranges[40])
-    off_right = scan_discrete(scan_msg.ranges[600])
-
+    off_right = scan_discrete(scan_msg.ranges[280])
+    off_left = scan_discrete(scan_msg.ranges[360])
     # group and publish the relevant scan ranges
     scan_group = Int32MultiArray()
     scan_group.data = [fwd_scan, rear_scan, l45_scan, l_scan, r45_scan, r_scan]
+    #print(scan_group.data)
     scan_pub.publish(scan_group)
 
 def check_odom(odom_msg):
@@ -97,7 +97,7 @@ def scan_discrete(scan_val):
     elif scan_val < 1.4:
         # close obstacle (adjacent vertex is occupied)
         return 1
-    elif scan_val < 3:
+    elif scan_val < 2.4:
         # visible obstacle, but not at the adjacent vertex
         return 2
     else:
@@ -165,6 +165,7 @@ def is_cmd_valid(str_cmd):
     #   the robot to move to an occupied vertex.
     if str_cmd == "forward":
         print("Trying to Move Forward", fwd_scan)
+        print([fwd_scan, rear_scan,  l_scan,  r_scan])
         return fwd_scan > 1.75 and off_right > 1.5 and off_left > 1.5
     elif str_cmd == "turn_left" or str_cmd == "turn_right" or str_cmd == "turn_180":
         print("Turning in place")
@@ -317,7 +318,7 @@ def main():
     finish_pub = rospy.Publisher('/tp/finish', Bool, queue_size=1)
 
     # subscribe to the lidar scan values.
-    rospy.Subscriber('/scan', LaserScan, check_scan, queue_size=1)
+    rospy.Subscriber('/scan', LaserScan, check_scan, queue_size=3)
     # subscribe to custom topic /tp/cmd which is used for discrete commands.
     rospy.Subscriber('/tp/cmd', String, add_cmd, queue_size=1)
     # subscrive to odometry info.
