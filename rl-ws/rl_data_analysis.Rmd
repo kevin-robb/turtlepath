@@ -78,6 +78,19 @@ num_files = 6
 colors = c("royalblue","royalblue1","royalblue2","royalblue3","royalblue4","slateblue4")
 ```
 
+### Random
+
+```{r}
+title = "Random"
+filename = "random_2020-11-04-12-36-26"
+filedir = "data/"
+num_files = 6
+colors = c("darkgoldenrod","darkgoldenrod1","darkgoldenrod2","darkgoldenrod3","darkgoldenrod4","burlywood4")
+```
+
+
+
+
 ## Plot the data and save as a png
 
 ```{r}
