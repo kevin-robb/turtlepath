@@ -78,6 +78,19 @@ num_files = 6
 colors = c("royalblue","royalblue1","royalblue2","royalblue3","royalblue4","slateblue4")
 ```
 
+### Random
+
+```{r}
+title = "Random"
+filename = "random_2020-11-04-12-36-26"
+filedir = "data/"
+num_files = 6
+colors = c("darkgoldenrod","darkgoldenrod1","darkgoldenrod2","darkgoldenrod3","darkgoldenrod4","burlywood4")
+```
+
+
+
+
 ## Plot the data and save as a png
 
 ```{r}
@@ -100,7 +113,7 @@ head(df)
 # overlay all the graphs using ggplot
 require(ggplot2)
 # add the x values
-g <- ggplot(df, aes(episode))
+g <- ggplot(df, aes((episode - 1)*25)) + xlim(0, 125)
 # add all the sets of y values
 for (count in counts) {
   g <- g + geom_line(aes_string(y=df[,count+1]), colour=colors[count])
@@ -114,7 +127,7 @@ g
 
 # Save the plot to a file
 # open the file
-filepath = paste("plots/", filename, ".png", sep="")
+filepath = paste("plots/", filename, "_crop", ".png", sep="")
 png(file=filepath, width=600, height=350)
 # show the plot
 g
