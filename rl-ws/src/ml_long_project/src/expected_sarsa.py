@@ -33,33 +33,71 @@ cur_state = "init"
 
 # Are we training or executing?
 train = None
+# what is the base map name?(set later)
 map_name = ""
 
 vel = Twist()
-current_position = Pose2D(-2,-2,0)
+current_position = Pose2D(0,0,0)
 
 goal_point =  Pose2D(4,4,0) # Weird coord transform error
 path = []
-global_map =np.genfromtxt("/home/lelliott/turtlepath/rl-ws/map.csv", delimiter=',')
+cmds = []
 map = {}
 
 finished = False
 
-
+# Try several times to reset the stage after a crash
 def reset_stage():
-    global current_position
-    current_position = Pose2D(-2,-2,0)
+    send_command('reset')
+    rospy.sleep(1)
+    send_command('reset')
+    rospy.sleep(1)
+    send_command('reset')
+    rospy.sleep(1)
+    send_command('reset')
 
+# Get the scan ranges
+def get_scan_ranges(scan_msg):
+    global fwd_scan, rear_scan, l45_scan, l_scan, r45_scan, r_scan
+    # format is [fwd_scan, rear_scan, l45_scan, l_scan, r45_scan, r_scan]
+
+
+    # update the important entries
+    fwd_scan = scan_msg.data[0] # directly forward
+    rear_scan = scan_msg.data[1] # directly behind
+    l45_scan = scan_msg.data[2] # ~45 degrees left
+    l_scan = scan_msg.data[3] # 90 degrees left
+    r45_scan = scan_msg.data[4] # ~45 degrees right
+    r_scan = scan_msg.data[5] # 90 degrees right
+
+# Delete_q to train from scratch
 def delete_q(map_name):
     if os.path.exists(map_name + ".sarsa"):
         os.remove(map_name + ".sarsa")
     else:
         print("The file does not exist") 
 
+# Update the current state
+def check_state():
+    global cur_state
+    global train, map_name
+    global goal_point, path, cmds
+    if cur_state == "init":
+        cur_state = "plan"
+
+    elif cur_state == "plan":
+        path = master_train(map_name,goal_point,train)
+       
+        if(len(path) > 0):
+            cur_state = "execute"
+            path_to_cmd()
+    elif(cur_state == 'execute'):
+        cur_state = 'done'
+
 def master_train(map_name,goal_point,train):
     global map
     delete_q(map_name)
-    # train several times in real life to build a map
+
     count = 0
     accelerate = True
     episode_num = 25
@@ -67,40 +105,62 @@ def master_train(map_name,goal_point,train):
     training_data = [[i,0, True] for i in range(episode_num)]
     satisfied = False
     s_count = 0
+
+    # We are going to train till we are satisfied with the results
     while not satisfied:
         s_count +=1
         count = 0
         for i in range(0,episode_num):
-            path1, crashed = train_sarsa_real_life(map_name,goal_point,train, count,episode_num)
-            print(len(path1))
+            path, crashed = train_sarsa_real_life(map_name,goal_point,train, count,episode_num)
+            print(len(path))
             reset_stage()
-            training_data[int(i)][1] = len(path1)
+            
+            training_data[int(i)][1] = len(path)
             training_data[int(i)][2] = crashed
 
-            if(not crashed): # don't want to train till we have sufficent iterations and have a goal
-                if(accelerate):
-                    print("Accelerating Training")
-                    # This path is always "the best found" since epsilon is zero on the last run
-                    path2, goal_met = train_sarsa_accel(map_name, goal_point, 30)
-                    # print("accelerator reached goal? : " + str(goal_met))
-                    print(len(path2))
-                    # print("Accelerator Path:")
-                    # print(path)
-                    # print(len(path))
             count += 1
-            if(len(path1) > 19):
-                satisfied = False
-            else:
-                print("Took: " + str(s_count*episode_num))
-                satisfied = True
+        if(len(path) > 19 or crashed):
+            satisfied = False
+        else:
+            print("Took: " + str(s_count*episode_num))
+            satisfied = True
 
     # save data each count from training to use for plots and analysis
     filepath = "/home/"+getuser()+"/turtlepath/rl-ws/data/"
-    filename = "accel_sarsa_" + map_name + "_" + dt.strftime("%Y-%m-%d-%H-%M-%S") + "_c" + str(count)
+    filename = "expected_sarsa_" + map_name + "_" + dt.strftime("%Y-%m-%d-%H-%M-%S") + "_c" + str(count)
     np.savetxt(filepath + filename + ".csv", training_data, delimiter=",")
 
     
     return path
+
+def send_next_cmd(req_status):
+    # when the next command is requested, send it and remove it from the list.
+    global cmds
+    if cur_state == "done" and len(cmds) > 0: 
+        # only try to send a command if they are ready.
+        cmd = cmds.pop(0)
+        print("Sending command: ", cmd)
+        send_command(cmd)
+
+# turn the path (set of points) into a set of commands.
+def path_to_cmd():
+    # build up a list of commands from the path
+    global cmds,path
+    cmds = []
+    while len(path) > 0:
+        next = path.pop(0)
+        if next == 0:
+            cmds.append("north")
+        elif next == 1:
+            cmds.append("east")
+        elif next == 3:
+            cmds.append("west")
+        elif next == 2:
+            cmds.append("south")
+
+  
+    print("path_to_cmd finished.")
+    print(cmds)
 
 def retrieve_q(map_name):
     # Save out data to map_name.sarsa so we don't have to retrain on familiar maps
@@ -116,68 +176,6 @@ def retrieve_q(map_name):
 def write_q(map_name, q):
     pickle.dump(q, open(map_name + ".sarsa","wb"))
 
-def train_sarsa_accel(map_name, goal_point, episode_num):
-    global current_position
-
-    alpha = .5
-    gamma = .99
-    eps  = .2
-    # Episode
-    episode = 0
-
-    q = retrieve_q(map_name)
-   
-    while episode < episode_num:
-
-        timeout = 0
-        path = []
-
-        # a is action
-        # 0 is North
-        # 1 is East
-        # 2 is South
-        # 3 is West
-        # s is state and equals a point in the map
-        s = to_str(current_position)
-        # Choose A from S using policy dervied from Q (e.g. e-greedy)
-        a = e_greedy(eps, q, s)
-        # Loop through episode
-        # We don't monitor crashed in simulation since it's hard to monitor (and shouldn't happen)
-        while timeout < 1000 and s != to_str(goal_point):
-            path.append(a)
-
-            # Take action A, observe R,S'
-            r, s_prime = execute_sim(a,s,q)
-            # Choose A' from S' using policy dervied from Q (e.g. e-greedy)
-            a_prime = e_greedy(eps, q, s_prime)
-
-            if not (s in q): # If Q is not initalized for our action set it to 0
-                d={}
-                d[a] = 0
-                q[s] = d
-            elif not a in q[s]:
-                q[s][a] = 0
-            if not (s_prime in q):
-                d={}
-                d[a_prime] = 0
-                q[s_prime] = d
-            elif not a_prime in q[s_prime]:
-                q[s_prime][a_prime] = 0
-
-    
-            # Q(S,A) <- Q(S,A) + alpha[R+gamma * Q(S',A')- Q(S,A)]
-            q[s][a] = q[s][a] + alpha * (r+gamma*q[s_prime][a_prime] - q[s][a])
-
-            # S<- S'; A<-A';
-            s = s_prime
-            a = a_prime
-            timeout +=1
-
-        episode +=1
-
-    write_q(map_name,q)
-    goal_met = (s == to_str(goal_point))
-    return path, goal_met 
 
 def train_sarsa_real_life(map_name, goal_point, train, count, max_count):
     # set date which is used in data output filenames
@@ -207,14 +205,14 @@ def train_sarsa_real_life(map_name, goal_point, train, count, max_count):
     a = e_greedy(eps, q, s)
     # Loop through episode
     crashed = False
-    while timeout < 1000 and s != to_str(goal_point) and not crashed:
+    while timeout < 5000 and s != to_str(goal_point) and not crashed:
         path.append(a)
-
         # Take action A, observe R,S'
         r, s_prime, crashed = execute_rl(a,s)
         # Choose A' from S' using policy dervied from Q (e.g. e-greedy)
         a_prime = e_greedy(eps, q, s_prime)
-
+        
+        # If Q is not initalized for our action set it to 0
         if not (s in q):
             d={0:0, 1:0, 2:0, 3:0}
             q[s] = d
@@ -222,19 +220,31 @@ def train_sarsa_real_life(map_name, goal_point, train, count, max_count):
         if not (s_prime in q):
             d={0:0, 1:0, 2:0, 3:0}
             q[s_prime] = d
-
-    
         
         # Q(S,A) <- Q(S,A) + alpha[R+gamma * Q(S',A')- Q(S,A)]
-        q[s][a] = q[s][a] + alpha * (r+gamma*q[s_prime][a_prime] - q[s][a])
+        expectation = 0
+        greedy_actions = 0
+        q_max = np.max([q[s_prime][action] for action in q.get(s_prime)]) 
+        for actions in q.get(s_prime):
+            if(q[s_prime][actions] == q_max):
+                greedy_actions +=1
+        ng_prob = eps/4
+        g_prob = (1-eps)/greedy_actions + ng_prob
+
+        for actions in q.get(s_prime):
+            if(q[s_prime][actions] == q_max):
+                expectation += q[s_prime][actions] * g_prob
+            else:
+                expectation  += q[s_prime][actions] * ng_prob
+
+        q[s][a] = q[s][a] + alpha * (r+gamma*expectation - q[s][a])
 
         # S<- S'; A<-A';
         s = s_prime
         a = a_prime
         timeout+=1
-
-    #print(path)
-    #print("Crashed: " + str(crashed))
+    print(path)
+    print("Crashed: " + str(crashed))
     write_q(map_name,q)
     return path, s != to_str(goal_point) or crashed
 
@@ -288,46 +298,34 @@ def execute_sim(action, state, q):
         r = map[state][action]['reward']
     return r, s_prime
 
-def decode_string(s):
-    if(s[8] == '-'):
-        y = -1 * int(s[9])
-    elif(len(s) >= 10 and s[9] == '-'):
-        y = -1 * int(s[10]) 
-    elif(s[3] == '-'):
-       y = int(s[9])        
-    else:
-        y = int(s[8])
-
-    if(s[3] == '-'):
-        x = -1 * int(s[4])
-    else:
-        x = int(s[3])
-    
-    return x,y
-
 def execute_rl(a,s):
     global map
     global vel
     global current_position
     global finished
     prev = copy.deepcopy(current_position)
-    #send_command(decode_action(a))
-    x,y = decode_string(s)
+    send_command(decode_action(a))
 
-    if(a == 0):
-        x +=1
-    elif(a == 1):
-        y -= 1
-    elif(a == 2):
-        x -=1
-    elif(a ==3):
-        y +=1
-
-    new_position = Pose2D(x,y,0)
-    if not (check_global(new_position)):
-        current_position = new_position  
-    
+    count = 0
     crashed = False
+    crashed_count = 0
+    timeout =0
+    while count < 5 and crashed_count < 50 and timeout < 300:
+        if (abs(vel.linear.x) < .1 and abs(vel.angular.z) < .5):
+            count +=1
+        else:
+            count =0
+        crashed = abs(vel.linear.x) > .5 and current_position != prev
+        if(crashed):
+            crashed_count +=1
+        else:
+            crashed_count =0
+        rospy.sleep(.1)  
+
+        timeout +=1
+   
+    if(timeout > 250):
+        crashed = True
     #print("Next")
     # return it's new location
     reward = -1
@@ -348,11 +346,56 @@ def execute_rl(a,s):
         map[s][a] = {"state":s_prime,"reward":reward}
     return reward, s_prime, crashed
 
-def check_global(point):
-    global global_map
-    x = point.x + 5
-    y = (point.y*-1 + 5) 
-    return bool(global_map[y][x])
 
-master_train("test1", goal_point, True)
-print("done")
+def check_odom(odom_msg):
+    global vel
+    global current_position
+    current_position.x = round(odom_msg.pose.pose.position.x)
+    current_position.y = round(odom_msg.pose.pose.position.y) # round to nearest int
+    vel = odom_msg.twist.twist
+def send_command(keyword):
+    cmd_msg.data = keyword
+    command_pub.publish(cmd_msg)
+
+def update_state(timer_event):
+    # at each timer step, update the state and send an action
+    check_state()
+
+    # tell us the current state for debug
+    #print(cur_state)
+    #print([fwd_scan, l_scan, rear_scan, r_scan])
+
+def action_finished(msg):
+    global finished
+    finished = msg.data
+
+def main():
+    global command_pub, train, map_name
+
+    # initialize node
+    rospy.init_node('sarsa')
+    
+    train = rospy.get_param('~train')
+    map_name = rospy.get_param('~map_name')
+
+    # publish command to the turtlebot
+    command_pub = rospy.Publisher("/tp/cmd", String, queue_size=1)
+
+    # subscribe to the grouped scan values
+    # format is [fwd_scan, rear_scan, l45_scan, l_scan, r45_scan, r_scan]
+    rospy.Subscriber('/tp/scan', Int32MultiArray, get_scan_ranges, queue_size=1)
+    rospy.Subscriber('/tp/request', Bool, send_next_cmd, queue_size=1)
+    rospy.Subscriber('/odom', Odometry, check_odom, queue_size=1)
+    rospy.Subscriber('/tp/finish', Bool, action_finished, queue_size=1)
+
+    # Set up a timer to update robot's drive state at 1 Hz
+    rospy.Timer(rospy.Duration(secs=.25), update_state)
+    # pump callbacks
+    rospy.spin()
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except rospy.ROSInterruptException:
+        pass

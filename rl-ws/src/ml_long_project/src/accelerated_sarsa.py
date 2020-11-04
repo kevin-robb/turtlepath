@@ -118,6 +118,18 @@ def master_train(map_name,goal_point,train):
             
             training_data[int(i)][1] = len(path1)
             training_data[int(i)][2] = crashed
+
+            # don't want to train till we have sufficent iterations and have a goal
+            if(not crashed): 
+                if(accelerate):
+                    print("Accelerating Training")
+                    # This path is always "the best found" since epsilon is zero on the last run
+                    path2, goal_met = train_sarsa_accel(map_name, goal_point, 30)
+                    # print("accelerator reached goal? : " + str(goal_met))
+                    # print(len(path))
+                    # print("Accelerator Path:")
+                    # print(path)
+                    # print(len(path))
             count += 1
         if(len(path1) > 19 or crashed):
             satisfied = False
@@ -176,6 +188,69 @@ def retrieve_q(map_name):
 def write_q(map_name, q):
     pickle.dump(q, open(map_name + ".sarsa","wb"))
 
+def train_sarsa_accel(map_name, goal_point, episode_num):
+    global current_position
+
+    alpha = .5
+    gamma = .99
+    eps  = .2
+    # Episode
+    episode = 0
+
+    q = retrieve_q(map_name)
+   
+    while episode < episode_num:
+
+
+        timeout = 0
+        path = []
+
+        # a is action
+        # 0 is North
+        # 1 is East
+        # 2 is South
+        # 3 is West
+        # s is state and equals a point in the map
+        s = to_str(current_position)
+        # Choose A from S using policy dervied from Q (e.g. e-greedy)
+        a = e_greedy(eps, q, s)
+       
+        # We don't monitor crashed in simulation since it's hard to simulate (and shouldn't happen ideally)
+        while timeout < 1000 and s != to_str(goal_point):
+            path.append(a)
+
+            # Take action A, observe R,S'
+            r, s_prime = execute_sim(a,s,q)
+            # Choose A' from S' using policy dervied from Q (e.g. e-greedy)
+            a_prime = e_greedy(eps, q, s_prime)
+
+            if not (s in q): # If Q is not initalized for our action set it to 0
+                d={}
+                d[a] = 0
+                q[s] = d
+            elif not a in q[s]:
+                q[s][a] = 0
+            if not (s_prime in q):
+                d={}
+                d[a_prime] = 0
+                q[s_prime] = d
+            elif not a_prime in q[s_prime]:
+                q[s_prime][a_prime] = 0
+
+    
+            # Q(S,A) <- Q(S,A) + alpha[R+gamma * Q(S',A')- Q(S,A)]
+            q[s][a] = q[s][a] + alpha * (r+gamma*q[s_prime][a_prime] - q[s][a])
+
+            # S<- S'; A<-A';
+            s = s_prime
+            a = a_prime
+            timeout +=1
+
+        episode +=1
+
+    write_q(map_name,q)
+    goal_met = (s == to_str(goal_point))
+    return path, goal_met 
 
 def train_sarsa_real_life(map_name, goal_point, train, count, max_count):
     # set date which is used in data output filenames
@@ -266,6 +341,22 @@ def e_greedy(eps, q, s):
         a = np.random.randint(0,4) 
     return a
 
+def execute_sim(action, state, q):
+    global map
+    # IMPORTANT: Execute does not factor in heading. It is only based on finding a coordinate path similar to A* and Potential Fields
+    # Ie North goes down a y val, East increments x etc
+    # Reward is always -1. Unless it tries to go into a wall, it doesn't move and gets a -5
+    if (not (state in map)) or (not (action in map[state])):
+        # we haven't ever seen the requested action in s
+        # thus it's too risky to actually take
+        # but we don't want to give it a
+        # strong negative rewards such that it never gets taken
+        r = -1
+        s_prime = state
+    else:
+        s_prime = map[state][action]['state']
+        r = map[state][action]['reward']
+    return r, s_prime
 
 def execute_rl(a,s):
     global map

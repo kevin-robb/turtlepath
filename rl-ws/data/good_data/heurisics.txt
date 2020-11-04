@@ -1,4 +1,0 @@
-
-A*: Always gets to 18
-PF: Path of 3, gets trapped locally (it could be a bug but I don't think so)
-Rand: Alot probably, I didn't watch it
