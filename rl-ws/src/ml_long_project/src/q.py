@@ -19,6 +19,7 @@ import numpy as np
 from datetime import datetime
 import pandas as pd
 import os
+import math
 
 ## Global Variables
 # mobile_base velocity publisher
@@ -238,7 +239,7 @@ def max_q(q, s_prime):
     #print("finding max q for ", s_prime.x, s_prime.y)
     # after we take action A and arrive at state S', 
     #   we will find the highest Q value for S' with any available action A'.
-    max_q = -math.inf
+    max_q = -1*float('inf')
     for a_prime in range(4):
         if q[s_prime][a_prime] > max_q:
             max_q = q[s_prime][a_prime]

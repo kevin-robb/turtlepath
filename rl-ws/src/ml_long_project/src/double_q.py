@@ -170,7 +170,7 @@ def retrieve_q(map_name):
         q1 = pickle.load( open(map_name + ".q1", "rb" ) )
         q1 = dict(q1)
         q2 = pickle.load( open(map_name + ".q2", "rb" ) )
-        q2 = dict(q2)    except (OSError, IOError) as e:
+        q2 = dict(q2)
     except (OSError, IOError) as e:
         # There are states(x,y) and 4 Actions (up, down, right, left)
         q1 = {}

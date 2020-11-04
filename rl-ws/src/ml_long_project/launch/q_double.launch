@@ -9,7 +9,7 @@
  -->
 <launch>
   <!-- Launch our nodes that control the robot. -->
-  <node pkg="ml_long_project" type="sarsa.py" name="sarsa" output="screen">
+  <node pkg="ml_long_project" type="double_q.py" name="sarsa" output="screen">
     <param name="~train" value="false" />
     <param name="map_name" value="map1" />
   </node>
