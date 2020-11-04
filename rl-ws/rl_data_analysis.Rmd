@@ -100,7 +100,7 @@ head(df)
 # overlay all the graphs using ggplot
 require(ggplot2)
 # add the x values
-g <- ggplot(df, aes(episode))
+g <- ggplot(df, aes((episode - 1)*25)) + xlim(0, 125)
 # add all the sets of y values
 for (count in counts) {
   g <- g + geom_line(aes_string(y=df[,count+1]), colour=colors[count])
@@ -114,7 +114,7 @@ g
 
 # Save the plot to a file
 # open the file
-filepath = paste("plots/", filename, ".png", sep="")
+filepath = paste("plots/", filename, "_crop", ".png", sep="")
 png(file=filepath, width=600, height=350)
 # show the plot
 g
