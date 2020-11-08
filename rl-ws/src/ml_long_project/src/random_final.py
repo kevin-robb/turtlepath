@@ -89,11 +89,6 @@ def master_train(map_name,goal_point,train):
 def train_q_real_life(map_name, goal_point, train, count, max_count):
     global current_position
 
-    if(count < 2):
-        eps = 1 # totally random walk to build a better model
-    if(count == max_count -1):
-        eps = .05
-
     timeout = 0
     path = []
     # a is action
